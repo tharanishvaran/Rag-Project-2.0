@@ -27,8 +27,9 @@ Flask-Limiter==3.8.0
 
 # AI / Embeddings
 sentence-transformers==3.0.1
-torch==2.3.1
+torch>=2.0.0
 numpy==1.26.4
+
 
 # Vector Database
 chromadb==0.5.5
