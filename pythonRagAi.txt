@@ -1,0 +1,1405 @@
+
+🎓📚 Project Idea: CampusMind AI – College Document RAG Assistant
+
+An AI-powered RAG system where students upload and query college-related documents such as syllabus, notes, question papers, regulations, and study materials.
+
+Example
+
+A student uploads:
+
+📁 MCA Syllabus.pdf
+📁 Data Structures Notes.pdf
+📁 Previous Year Questions.pdf
+📁 College Regulations.pdf
+
+Then asks:
+
+💬 "What are the important Unit 3 topics?"
+
+💬 "Show previous exam questions related to stacks."
+
+💬 "What are the eligibility requirements for semester exams?"
+
+The system searches the uploaded documents and generates an answer based on the relevant content.
+
+CampusMind-AI/
+│
+├── frontend/                    # React Application
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── FileUpload.jsx
+│   │   │   ├── ChatBox.jsx
+│   │   │   ├── ChatMessage.jsx
+│   │   │   └── SourceCitation.jsx
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── Login.jsx
+│   │   │   ├── Register.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   └── Chat.jsx
+│   │   │
+│   │   ├── services/
+│   │   │   └── api.js
+│   │   │
+│   │   └── App.jsx
+│   │
+│   └── package.json
+│
+├── backend/                     # Flask Application
+│   ├── app.py
+│   │
+│   ├── routes/
+│   │   ├── auth.py
+│   │   ├── upload.py
+│   │   └── chat.py
+│   │
+│   ├── services/
+│   │   ├── pdf_processor.py
+│   │   ├── text_chunker.py
+│   │   ├── embeddings.py
+│   │   ├── vector_store.py
+│   │   └── rag_service.py
+│   │
+│   ├── uploads/
+│   │
+│   ├── database/
+│   │   └── app.db
+│   │
+│   └── requirements.txt
+│
+└── README.md
+
+
+# Smart Doc Ai
+
+You are an expert full-stack AI developer, Python developer, React developer, Flask developer, and RAG engineer.
+
+Build a complete, production-style academic project called:
+
+# Smart Doc Ai
+
+## Project Goal
+
+Build a full-stack web application where college students can:
+
+* Register and log in securely.
+* Upload one or multiple PDF documents.
+* Categorize uploaded documents.
+* Ask questions about uploaded documents.
+* Receive AI-generated answers based only on relevant uploaded content.
+* View the source document and page number for each answer.
+* Maintain chat sessions and chat history.
+* Search across multiple academic documents.
+* Filter questions based on document categories.
+* Analyze previous question papers.
+* Identify repeated or frequently asked questions/topics.
+* Suggest important topics for exam preparation.
+
+The project must use a proper **React frontend**, **Python Flask backend**, **MySQL relational database**, **ChromaDB vector database**, **Sentence Transformers embeddings**, **PyMuPDF for PDF processing**, and **Ollama as the local LLM**.
+
+Do not build a simple demo. Build a properly structured, modular, efficient, maintainable full-stack application.
+
+---
+
+# 1. Technology Stack
+
+## Frontend
+
+Use:
+
+* React
+* Vite
+* React Router
+* Axios
+* Modern CSS
+* Responsive design
+
+Optional UI libraries may be used only if necessary.
+
+The frontend should have a clean, modern, professional academic AI dashboard.
+
+## Backend
+
+Use:
+
+* Python
+* Flask
+* Flask-CORS
+* Flask-JWT-Extended for authentication
+* SQLAlchemy ORM
+* PyMySQL or MySQL Connector
+* python-dotenv
+
+## RAG and AI Technologies
+
+Use:
+
+* PyMuPDF for PDF text extraction
+* LangChain only where useful; avoid unnecessary abstraction
+* Sentence Transformers for embeddings
+* ChromaDB as the vector database
+* Ollama as the local LLM
+
+The RAG system should retrieve relevant document chunks and provide those chunks as context to Ollama.
+
+## Relational Database
+
+Use MySQL.
+
+MySQL should store structured application data.
+
+ChromaDB should store embeddings and document chunk metadata.
+
+Do not use ChromaDB as a replacement for the relational database.
+
+---
+
+# 2. High-Level Architecture
+
+The architecture must follow this flow:
+
+React Frontend
+
+↓
+
+Flask REST API
+
+↓
+
+Authentication and Business Logic
+
+↓
+
+MySQL + File Storage + RAG Pipeline
+
+RAG Pipeline:
+
+PDF Upload
+
+↓
+
+PyMuPDF Text Extraction
+
+↓
+
+Page-Level Processing
+
+↓
+
+Text Cleaning
+
+↓
+
+Text Chunking
+
+↓
+
+Sentence Transformer Embeddings
+
+↓
+
+ChromaDB Vector Storage
+
+↓
+
+User Question
+
+↓
+
+Question Embedding
+
+↓
+
+Similarity Search
+
+↓
+
+Retrieve Top Relevant Chunks
+
+↓
+
+Optional Metadata Filtering
+
+↓
+
+Send Context + User Question to Ollama
+
+↓
+
+Generate Answer
+
+↓
+
+Return:
+
+* AI Answer
+* Source Document Name
+* Page Number
+* Relevant Source Chunks
+
+↓
+
+React Chat Interface
+
+---
+
+# 3. User Roles
+
+Initially implement one primary role:
+
+## Student
+
+The student can:
+
+* Register
+* Log in
+* Upload PDFs
+* View uploaded documents
+* Delete documents
+* Categorize documents
+* Create chat sessions
+* Ask questions
+* View chat history
+* Filter documents
+* View answer sources
+
+Design the database so an Admin role can be added later.
+
+---
+
+# 4. MySQL Database Design
+
+Create the following tables.
+
+## users
+
+Fields:
+
+* id
+* name
+* email
+* password_hash
+* role
+* created_at
+* updated_at
+
+Requirements:
+
+* Email must be unique.
+* Passwords must never be stored as plain text.
+* Use secure password hashing.
+
+## categories
+
+Fields:
+
+* id
+* name
+* description
+* created_at
+
+Default categories:
+
+* Syllabus
+* Study Notes
+* Previous Question Papers
+* College Rules
+* Reference Materials
+
+## documents
+
+Fields:
+
+* id
+* user_id
+* category_id
+* original_filename
+* stored_filename
+* file_path
+* file_size
+* total_pages
+* upload_status
+* created_at
+
+Relationships:
+
+User 1 → Many Documents
+
+Category 1 → Many Documents
+
+## chat_sessions
+
+Fields:
+
+* id
+* user_id
+* title
+* created_at
+* updated_at
+
+## chat_messages
+
+Fields:
+
+* id
+* session_id
+* role
+
+The role should support:
+
+* user
+* assistant
+
+Additional fields:
+
+* message
+* created_at
+
+## message_sources
+
+Fields:
+
+* id
+* message_id
+* document_id
+* page_number
+* chunk_id
+* relevance_score
+
+This table should allow every AI answer to reference multiple sources.
+
+---
+
+# 5. Database Relationships
+
+Implement the following relationships:
+
+User
+
+→ uploads many Documents
+
+User
+
+→ owns many Chat Sessions
+
+Category
+
+→ contains many Documents
+
+Chat Session
+
+→ contains many Chat Messages
+
+Assistant Chat Message
+
+→ can have many Message Sources
+
+Document
+
+→ can appear in many Message Sources
+
+Use SQLAlchemy relationships and foreign keys properly.
+
+---
+
+# 6. Backend Folder Structure
+
+Use a modular Flask project structure similar to:
+
+backend/
+
+app/
+
+**init**.py
+
+config.py
+
+extensions.py
+
+models/
+
+user.py
+
+category.py
+
+document.py
+
+chat_session.py
+
+chat_message.py
+
+message_source.py
+
+routes/
+
+auth.py
+
+documents.py
+
+chat.py
+
+categories.py
+
+dashboard.py
+
+services/
+
+auth_service.py
+
+document_service.py
+
+pdf_service.py
+
+chunking_service.py
+
+embedding_service.py
+
+vector_service.py
+
+rag_service.py
+
+ollama_service.py
+
+question_analysis_service.py
+
+utils/
+
+validators.py
+
+file_utils.py
+
+error_handlers.py
+
+uploads/
+
+tests/
+
+run.py
+
+requirements.txt
+
+.env.example
+
+README.md
+
+Use clean separation between:
+
+* Routes
+* Models
+* Services
+* Utilities
+* Configuration
+
+Do not place all logic inside one Flask file.
+
+---
+
+# 7. Authentication System
+
+Implement:
+
+* Register API
+* Login API
+* JWT authentication
+* Protected routes
+* Logout handling on frontend
+* Password hashing
+
+API examples:
+
+POST /api/auth/register
+
+POST /api/auth/login
+
+GET /api/auth/me
+
+The React frontend should store authentication securely and automatically send the access token with protected API requests.
+
+---
+
+# 8. PDF Upload System
+
+Create an endpoint:
+
+POST /api/documents/upload
+
+The user should be able to:
+
+* Upload multiple PDFs.
+* Select a category.
+* Upload only PDF files.
+* See upload progress.
+* Receive processing status.
+
+Validation:
+
+* Validate file extension.
+* Validate MIME type where possible.
+* Limit maximum file size.
+* Generate unique stored filenames.
+* Prevent path traversal.
+* Handle corrupted PDFs gracefully.
+
+Upload process:
+
+1. User selects PDF files in React.
+2. React sends files using multipart/form-data.
+3. Flask validates files.
+4. Store the PDF securely.
+5. Create the document record in MySQL.
+6. Extract text using PyMuPDF.
+7. Preserve page numbers.
+8. Clean extracted text.
+9. Split text into chunks.
+10. Generate embeddings.
+11. Store embeddings in ChromaDB.
+12. Store metadata with each vector.
+13. Update document processing status.
+14. Return processing results to React.
+
+Document statuses:
+
+* uploaded
+* processing
+* completed
+* failed
+
+---
+
+# 9. PDF Processing Requirements
+
+Use PyMuPDF.
+
+Process PDFs page by page.
+
+For every extracted text section, preserve:
+
+* document_id
+* user_id
+* filename
+* category_id
+* page_number
+* chunk_index
+
+If a PDF contains no extractable text, return a useful error or mark it as unsupported.
+
+Structure the PDF processor so OCR support can be added later.
+
+---
+
+# 10. Text Chunking Strategy
+
+Implement efficient chunking.
+
+Recommended initial configuration:
+
+* Chunk size: approximately 800–1200 characters or a token-aware equivalent.
+* Chunk overlap: approximately 100–200 characters.
+
+The implementation should avoid breaking sentences unnecessarily.
+
+Each chunk must maintain metadata.
+
+Example metadata:
+
+{
+"document_id": 15,
+"user_id": 4,
+"category_id": 2,
+"filename": "Python_Notes.pdf",
+"page_number": 24,
+"chunk_index": 3
+}
+
+Create a reusable chunking service so chunking parameters can be changed through configuration.
+
+---
+
+# 11. Embedding System
+
+Use Sentence Transformers.
+
+Create a dedicated embedding service.
+
+Requirements:
+
+* Load the embedding model once during application startup where practical.
+* Avoid reloading the model for every request.
+* Generate embeddings in batches.
+* Handle long document processing efficiently.
+* Use the same embedding model for document chunks and user queries.
+
+The embedding service must expose methods such as:
+
+* embed_documents()
+* embed_query()
+
+Keep the implementation independent enough that the embedding model can be replaced later.
+
+---
+
+# 12. ChromaDB Vector Database
+
+Use persistent ChromaDB storage.
+
+Each vector should contain:
+
+* unique chunk ID
+* document text
+* embedding
+* metadata
+
+Metadata must include:
+
+* document_id
+* user_id
+* category_id
+* filename
+* page_number
+* chunk_index
+
+Use metadata filtering so users can:
+
+* Search only their own documents.
+* Search a specific document.
+* Search a specific category.
+
+Example:
+
+A user asks:
+
+“What are the important Unit 3 topics?”
+
+The retrieval system should search only documents belonging to that authenticated user.
+
+Never allow one user to retrieve another user's document embeddings.
+
+---
+
+# 13. RAG Pipeline
+
+Implement a dedicated RAG service.
+
+The question-answering flow should be:
+
+1. Authenticate user.
+2. Receive question.
+3. Receive optional filters:
+
+   * document ID
+   * category ID
+   * chat session ID
+4. Generate query embedding.
+5. Search ChromaDB.
+6. Retrieve the top relevant chunks.
+7. Remove duplicate or highly similar chunks if necessary.
+8. Prepare a clean context.
+9. Send the context and question to Ollama.
+10. Generate an answer.
+11. Return the answer and sources.
+12. Store the question and answer in MySQL.
+13. Store source references in message_sources.
+
+Use a configurable Top-K value.
+
+For example:
+
+TOP_K = 5
+
+The LLM prompt must clearly instruct the model:
+
+“You are an academic assistant. Answer the user's question using only the provided context. If the answer cannot be found in the context, clearly state that the information is not available in the uploaded documents. Do not invent information.”
+
+Always encourage grounded answers.
+
+---
+
+# 14. Ollama Integration
+
+Use Ollama as the local LLM provider.
+
+Create a separate service:
+
+ollama_service.py
+
+Requirements:
+
+* Configurable model name through environment variables.
+* Configurable Ollama URL.
+* Timeout handling.
+* Graceful errors when Ollama is not running.
+* Clean separation between RAG logic and Ollama communication.
+
+Example environment variables:
+
+OLLAMA_BASE_URL=
+
+OLLAMA_MODEL=
+
+Do not hardcode the model name.
+
+The system should be designed so another cloud LLM provider can be added later.
+
+Create a generic interface such as:
+
+generate_answer(context, question)
+
+This will make the application extensible.
+
+---
+
+# 15. Answer Source Citations
+
+Every answer should return sources.
+
+Example API response:
+
+{
+"answer": "Unit 3 focuses on Data Structures, including stacks, queues and linked lists.",
+"sources": [
+{
+"document_id": 15,
+"filename": "Data_Structures_Notes.pdf",
+"page_number": 24,
+"relevance_score": 0.91
+},
+{
+"document_id": 10,
+"filename": "MCA_Syllabus.pdf",
+"page_number": 12,
+"relevance_score": 0.87
+}
+]
+}
+
+The React frontend should display sources below each AI response.
+
+Example:
+
+Sources:
+
+📄 Data_Structures_Notes.pdf — Page 24
+
+📄 MCA_Syllabus.pdf — Page 12
+
+---
+
+# 16. Chat API
+
+Create:
+
+POST /api/chat/ask
+
+Request:
+
+{
+"session_id": 10,
+"question": "What are the important topics in Unit 3?",
+"category_id": null,
+"document_id": null
+}
+
+Response:
+
+{
+"message_id": 52,
+"answer": "...",
+"sources": []
+}
+
+Additional APIs:
+
+GET /api/chat/sessions
+
+POST /api/chat/sessions
+
+GET /api/chat/sessions/{id}
+
+DELETE /api/chat/sessions/{id}
+
+The system should automatically generate a session title based on the first question.
+
+---
+
+# 17. Document APIs
+
+Implement:
+
+POST /api/documents/upload
+
+GET /api/documents
+
+GET /api/documents/{id}
+
+DELETE /api/documents/{id}
+
+PATCH /api/documents/{id}/category
+
+When deleting a document:
+
+1. Delete the physical file.
+2. Delete the MySQL document record.
+3. Delete associated ChromaDB embeddings.
+4. Handle errors safely.
+
+Ensure users can only access and delete their own documents.
+
+---
+
+# 18. Category APIs
+
+Implement:
+
+GET /api/categories
+
+POST /api/categories
+
+PATCH /api/categories/{id}
+
+DELETE /api/categories/{id}
+
+Initially, categories can be global system categories.
+
+Design the code so user-defined categories can be supported later.
+
+---
+
+# 19. Previous Question Paper Analysis
+
+Implement this as an advanced module.
+
+Users should be able to select one or more previous question papers.
+
+The system should:
+
+* Extract questions.
+* Identify similar or repeated questions.
+* Group related questions.
+* Identify frequently occurring topics.
+* Display the number of times a topic appears.
+
+Example:
+
+Topic: Stacks
+
+Frequency: 4 years
+
+Topic: Linked Lists
+
+Frequency: 3 years
+
+Topic: Trees
+
+Frequency: 2 years
+
+The implementation should use semantic similarity instead of only exact text matching where practical.
+
+Do not claim that a topic is “guaranteed” to appear in an exam.
+
+Use wording such as:
+
+“Frequently appearing topic”
+
+or:
+
+“Repeated topic based on uploaded question papers.”
+
+---
+
+# 20. React Frontend Pages
+
+Create the following pages.
+
+## Authentication
+
+Login Page
+
+Register Page
+
+## Main Application
+
+Dashboard
+
+Upload Documents
+
+My Documents
+
+AI Chat
+
+Chat History
+
+Question Paper Analysis
+
+Profile
+
+---
+
+# 21. React Component Structure
+
+Use a clean structure:
+
+src/
+
+components/
+
+Navbar
+
+Sidebar
+
+DocumentUpload
+
+DocumentCard
+
+DocumentList
+
+CategoryFilter
+
+ChatWindow
+
+ChatInput
+
+ChatMessage
+
+SourceCitation
+
+ChatSessionList
+
+LoadingSpinner
+
+ErrorMessage
+
+pages/
+
+Login
+
+Register
+
+Dashboard
+
+Documents
+
+Chat
+
+QuestionAnalysis
+
+Profile
+
+services/
+
+api.js
+
+authService.js
+
+documentService.js
+
+chatService.js
+
+categoryService.js
+
+contexts/
+
+AuthContext.jsx
+
+Use reusable components.
+
+Avoid placing all UI code in App.jsx.
+
+---
+
+# 22. Dashboard
+
+The dashboard should display:
+
+* Total uploaded documents
+* Total categories
+* Total chat sessions
+* Recently uploaded documents
+* Recent conversations
+
+Example API:
+
+GET /api/dashboard
+
+Return structured statistics from MySQL.
+
+---
+
+# 23. AI Chat Interface
+
+The chat interface should feel similar to a modern AI application.
+
+Features:
+
+* User messages
+* AI responses
+* Loading state
+* Error handling
+* Source citations
+* Chat session history
+* New chat button
+* Document filtering
+* Category filtering
+
+The user should be able to select:
+
+“All Documents”
+
+or a specific:
+
+* Category
+* Document
+
+before asking a question.
+
+---
+
+# 24. Frontend API Communication
+
+Use Axios.
+
+Create a centralized API configuration.
+
+Example base URL should come from environment variables.
+
+Use:
+
+VITE_API_BASE_URL
+
+Implement an Axios interceptor to attach JWT authentication tokens.
+
+Handle:
+
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 500 Server Error
+
+Display user-friendly messages.
+
+---
+
+# 25. Security Requirements
+
+Implement:
+
+* Password hashing.
+* JWT authentication.
+* Authorization checks.
+* User-specific document access.
+* User-specific vector retrieval.
+* Secure file uploads.
+* File size limits.
+* File type validation.
+* Environment variables for secrets.
+* SQLAlchemy ORM instead of unsafe raw SQL.
+* Proper CORS configuration.
+* No API keys or secrets in frontend code.
+* No passwords stored in plain text.
+
+---
+
+# 26. Error Handling
+
+Implement consistent JSON error responses.
+
+Example:
+
+{
+"success": false,
+"error": "Document not found"
+}
+
+Use appropriate HTTP status codes.
+
+Examples:
+
+200 — Success
+
+201 — Created
+
+400 — Invalid Request
+
+401 — Unauthorized
+
+403 — Forbidden
+
+404 — Not Found
+
+413 — File Too Large
+
+500 — Internal Server Error
+
+Handle AI and Ollama errors separately.
+
+For example:
+
+{
+"success": false,
+"error": "The AI service is currently unavailable. Please ensure Ollama is running."
+}
+
+---
+
+# 27. Environment Configuration
+
+Create a .env.example file.
+
+Include variables such as:
+
+FLASK_ENV=
+
+SECRET_KEY=
+
+JWT_SECRET_KEY=
+
+DATABASE_URL=
+
+UPLOAD_FOLDER=
+
+MAX_CONTENT_LENGTH=
+
+CHROMA_PERSIST_DIRECTORY=
+
+EMBEDDING_MODEL=
+
+OLLAMA_BASE_URL=
+
+OLLAMA_MODEL=
+
+RAG_TOP_K=
+
+Do not include real secrets.
+
+---
+
+# 28. Performance Requirements
+
+Optimize the application.
+
+Requirements:
+
+* Load the embedding model once.
+* Use batch embedding generation.
+* Avoid duplicate processing.
+* Store document metadata in MySQL.
+* Store embeddings only in ChromaDB.
+* Use persistent ChromaDB.
+* Use indexes for important MySQL foreign keys.
+* Process large PDFs efficiently.
+* Provide processing status.
+* Do not block the frontend unnecessarily.
+
+For future scalability, structure document processing so a background task queue such as Celery can be added later.
+
+---
+
+# 29. Testing
+
+Include tests for:
+
+* User registration.
+* User login.
+* Protected routes.
+* PDF upload validation.
+* Document ownership.
+* Category filtering.
+* Chat session creation.
+* Message storage.
+* Vector metadata filtering.
+* RAG retrieval.
+* Error handling.
+
+Use pytest for backend testing.
+
+---
+
+# 30. README Documentation
+
+Generate a complete README.md containing:
+
+* Project title.
+* Project overview.
+* Features.
+* Architecture.
+* Technology stack.
+* Folder structure.
+* Database design.
+* Installation steps.
+* MySQL setup.
+* Ollama setup.
+* ChromaDB explanation.
+* Environment variable setup.
+* Backend startup.
+* Frontend startup.
+* API documentation.
+* Screenshots placeholders.
+* Future enhancements.
+
+---
+
+# 31. Implementation Strategy
+
+Build the project in phases.
+
+## Phase 1: Project Setup
+
+* Create React frontend using Vite.
+* Create modular Flask backend.
+* Configure MySQL.
+* Configure environment variables.
+* Configure CORS.
+
+## Phase 2: Authentication
+
+* User model.
+* Register.
+* Login.
+* JWT authentication.
+* Protected routes.
+
+## Phase 3: Document Management
+
+* Categories.
+* Multiple PDF upload.
+* Document table.
+* File validation.
+* Document listing.
+* Document deletion.
+
+## Phase 4: PDF Processing
+
+* PyMuPDF integration.
+* Page-level extraction.
+* Text cleaning.
+* Chunking.
+* Metadata generation.
+
+## Phase 5: Vector Database
+
+* Sentence Transformer integration.
+* Batch embedding generation.
+* ChromaDB storage.
+* Metadata filtering.
+* User-specific vector search.
+
+## Phase 6: RAG System
+
+* Query embedding.
+* Top-K retrieval.
+* Context preparation.
+* Ollama integration.
+* Grounded answer generation.
+* Source citations.
+
+## Phase 7: Chat System
+
+* Chat sessions.
+* Chat messages.
+* Chat history.
+* Source storage.
+
+## Phase 8: Frontend
+
+* Authentication pages.
+* Dashboard.
+* Document management.
+* Upload UI.
+* AI chat.
+* Sources.
+* Filters.
+* Chat history.
+
+## Phase 9: Advanced Features
+
+* Previous question paper analysis.
+* Repeated topic detection.
+* Important topic suggestions.
+
+## Phase 10: Testing and Documentation
+
+* Backend tests.
+* Error handling.
+* README.
+* API documentation.
+
+---
+
+# 32. Coding Rules
+
+Follow these rules strictly:
+
+1. Write clean and modular code.
+2. Use meaningful variable and function names.
+3. Add comments only where necessary.
+4. Do not create unnecessary duplicate code.
+5. Do not put all backend logic in app.py.
+6. Use service classes or clearly separated service modules.
+7. Validate all user input.
+8. Implement authorization checks on every protected resource.
+9. Keep MySQL and ChromaDB responsibilities separate.
+10. Do not generate fake functionality.
+11. Do not use mock AI responses in the final implementation.
+12. Provide working API endpoints.
+13. Include error handling.
+14. Make configuration environment-based.
+15. Build features incrementally and ensure each phase works before moving to the next.
+
+---
+
+# 33. Final Expected Result
+
+The completed application should allow the following workflow:
+
+1. A student registers and logs in.
+2. The student uploads multiple academic PDFs.
+3. The student assigns categories such as Syllabus, Notes, or Previous Question Papers.
+4. Flask stores document information in MySQL.
+5. PyMuPDF extracts text page by page.
+6. Text is chunked.
+7. Sentence Transformers generates embeddings.
+8. ChromaDB stores the embeddings and metadata.
+9. The student opens the AI Chat page.
+10. The student asks a question.
+11. The system retrieves relevant chunks only from documents owned by that student.
+12. Ollama generates an answer using the retrieved context.
+13. The application displays:
+
+    * AI-generated answer.
+    * Source document.
+    * Page number.
+14. The chat conversation is stored in MySQL.
+15. The student can return later and view previous chat sessions.
+
+The final application should be a complete portfolio-quality full-stack AI project demonstrating:
+
+* React
+* Python
+* Flask
+* REST APIs
+* JWT Authentication
+* MySQL
+* SQLAlchemy
+* PDF Processing
+* NLP
+* Embeddings
+* Vector Databases
+* ChromaDB
+* RAG
+* Ollama
+* LLM Integration
+* Source Citations
+* Full-Stack Application Development
+
+Start by generating the complete project folder structure. Then implement the project phase by phase.
+
+For every phase:
+
+1. Explain what is being built.
+2. Provide the files to create or modify.
+3. Provide complete working code.
+4. Explain how to run and test that phase.
+5. Do not skip required configuration.
+6. Wait until the current phase is complete before moving to the next phase.
+
+The final code should be suitable for a GitHub portfolio project and an MCA academic project.

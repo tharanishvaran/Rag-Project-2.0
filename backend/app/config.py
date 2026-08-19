@@ -1,0 +1,86 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Config:
+    """Base configuration class."""
+    
+    # Flask
+    SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
+    DEBUG = False
+    TESTING = False
+    
+    # JWT
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'fallback-jwt-secret')
+    JWT_ACCESS_TOKEN_EXPIRES = 86400  # 24 hours in seconds
+    
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_recycle': 300,
+        'pool_pre_ping': True,
+    }
+    
+    # File Uploads
+    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 52428800))  # 50MB
+    ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'pptx'}
+
+    
+    # Rate Limiting
+    RATELIMIT_DEFAULT = os.getenv('RATELIMIT_DEFAULT', '100 per day;30 per hour')
+    
+    # ChromaDB
+    CHROMA_PERSIST_DIRECTORY = os.getenv('CHROMA_PERSIST_DIRECTORY', 'chroma_db')
+    
+    # Embedding Model
+    EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
+    
+    # Gemini API
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.5-flash-lite')
+    GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS', 4096))
+
+    # Ollama
+    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
+    OLLAMA_NUM_PREDICT = int(os.getenv('OLLAMA_NUM_PREDICT', 1500))
+    OLLAMA_NUM_CTX = int(os.getenv('OLLAMA_NUM_CTX', 4096))
+    
+    # RAG Settings
+    RAG_TOP_K = int(os.getenv('RAG_TOP_K', 5))
+    CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1000))
+    CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', 150))
+
+
+class DevelopmentConfig(Config):
+    """Development configuration."""
+    DEBUG = True
+    FLASK_ENV = 'development'
+
+
+class ProductionConfig(Config):
+    """Production configuration."""
+    DEBUG = False
+    FLASK_ENV = 'production'
+
+
+class TestingConfig(Config):
+    """Testing configuration."""
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+
+
+config_map = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig,
+    'testing': TestingConfig,
+}
+
+
+def get_config():
+    env = os.getenv('FLASK_ENV', 'development')
+    return config_map.get(env, DevelopmentConfig)

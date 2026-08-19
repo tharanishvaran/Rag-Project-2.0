@@ -1,0 +1,212 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  height: var(--navbar-height);
+  background: var(--bg-surface);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  z-index: 90;
+  transition: all var(--transition-smooth);
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.navbar-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.navbar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Theme Switcher */
+.theme-switcher-wrapper {
+  position: relative;
+}
+
+.theme-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+}
+
+.theme-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chevron {
+  transition: transform var(--transition-fast);
+}
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+.theme-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 210px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 200;
+  animation: fadeInUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dropdown-header {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  padding: 6px 10px 4px;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-option:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-main);
+}
+
+.theme-option.active {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.theme-icon {
+  font-size: 1rem;
+}
+
+.theme-label {
+  flex: 1;
+  text-align: left;
+}
+
+.theme-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Icon Buttons */
+.navbar-icon-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.navbar-icon-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-surface-hover);
+}
+
+.notification-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+}
+
+/* User Pill */
+.navbar-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 6px;
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.user-pill-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-pill-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    left: 0;
+    padding: 0 16px;
+  }
+}

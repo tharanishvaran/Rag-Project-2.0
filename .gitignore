@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+
+# Environment Variables
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+# Build Outputs
+dist/
+frontend/dist/
+build/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Databases & User Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/chroma_db/
+*.db
+*.sqlite
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

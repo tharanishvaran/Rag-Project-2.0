@@ -1,0 +1,204 @@
+import logging
+from flask import current_app
+
+from app.services.embedding_service import EmbeddingService
+from app.services.vector_service import VectorService
+from app.services.ollama_service import OllamaService
+from app.services.gemini_service import GeminiService
+from app.models.chat_message import ChatMessage
+from app.models.message_source import MessageSource
+from app.extensions import db
+
+logger = logging.getLogger(__name__)
+
+
+class RAGService:
+    """
+    Orchestrates the full Retrieval-Augmented Generation pipeline:
+    question → embedding → vector search → context → Gemini / Ollama → answer + sources
+    """
+    
+    def __init__(self):
+        self.embedding_service = EmbeddingService()
+        self.vector_service = VectorService()
+        self.ollama_service = OllamaService()
+        self.gemini_service = GeminiService()
+    
+    def answer_question(
+        self,
+        question: str,
+        user_id: int,
+        session_id: int,
+        document_id: int = None,
+        category_id: int = None,
+        explanation_mode: str = 'normal',
+        language: str = 'English',
+        history: list = None,
+    ) -> dict:
+        """
+        Full RAG pipeline for answering a user question with style mode, language, and context preservation.
+        
+        Returns:
+            {
+                'answer': str,
+                'sources': [{'document_id', 'filename', 'page_number', 'section', 'file_type', 'relevance_score', 'chunk_id', 'snippet'}],
+                'message_id': int,
+            }
+        """
+        top_k = current_app.config.get('RAG_TOP_K', 5)
+        
+        # Fetch session history if not explicitly provided
+        if history is None and session_id:
+            past_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.asc()).limit(10).all()
+            history = [{'role': m.role, 'content': m.message} for m in past_messages]
+
+        # Step 1: Embed the question
+        logger.info(f'Embedding question: "{question[:80]}..." (mode={explanation_mode}, lang={language})')
+        query_embedding = self.embedding_service.embed_query(question)
+        
+        # Step 2: Search ChromaDB for relevant chunks (user-scoped)
+        logger.info(f'Searching vector store (user={user_id}, doc={document_id}, cat={category_id})')
+        raw_results = self.vector_service.query(
+            query_embedding=query_embedding,
+            user_id=user_id,
+            n_results=top_k,
+            document_id=document_id,
+            category_id=category_id,
+        )
+        
+        if not raw_results:
+            logger.info('No document chunks found. Proceeding with general knowledge mode...')
+            deduplicated = []
+            context = "No uploaded document context found for this query."
+        else:
+            deduplicated = self._deduplicate_chunks(raw_results)
+            context = self._build_context(deduplicated)
+        
+        # Step 4: Generate answer with Gemini (if API key present) or Ollama
+        use_gemini = bool(current_app.config.get('GEMINI_API_KEY'))
+        
+        answer = None
+        if use_gemini:
+            try:
+                logger.info(f'Sending {len(deduplicated)} chunks to Google Gemini API as context...')
+                answer = self.gemini_service.generate_answer(
+                    context=context, 
+                    question=question, 
+                    explanation_mode=explanation_mode, 
+                    language=language, 
+                    history=history
+                )
+            except Exception as e:
+                logger.warning(f'Gemini API error ({e}), falling back to Ollama...')
+        
+        if not answer:
+            logger.info(f'Sending {len(deduplicated)} chunks to Ollama as context...')
+            try:
+                answer = self.ollama_service.generate_answer(context, question)
+            except RuntimeError as e:
+                raise RuntimeError(str(e))
+        
+        # Step 5: Prepare source citations
+        sources = self._extract_sources(deduplicated)
+        
+        # Step 6: Store in MySQL
+        message_id = self._store_message(session_id, question, answer, sources)
+        
+        return {
+            'answer': answer,
+            'sources': sources,
+            'message_id': message_id,
+        }
+
+    
+    def _deduplicate_chunks(self, results: list[dict]) -> list[dict]:
+        """Remove highly similar/duplicate chunks based on text similarity."""
+        seen_texts = set()
+        unique = []
+        
+        for result in results:
+            # Simple deduplication: skip if text starts with same 100 chars
+            text_key = result['text'][:100].strip()
+            if text_key not in seen_texts:
+                seen_texts.add(text_key)
+                unique.append(result)
+        
+        return unique
+    
+    def _build_context(self, chunks: list[dict]) -> str:
+        """Format chunks into a clean context string for the LLM prompt."""
+        parts = []
+        
+        for i, chunk in enumerate(chunks, 1):
+            meta = chunk['metadata']
+            filename = meta.get('filename', 'Unknown Document')
+            page_num = meta.get('page_number', '?')
+            
+            parts.append(
+                f'[Source {i}: {filename}, Page {page_num}]\n{chunk["text"]}'
+            )
+        
+        return '\n\n---\n\n'.join(parts)
+    
+    def _extract_sources(self, chunks: list[dict]) -> list[dict]:
+        """Extract unique source citations from retrieved chunks."""
+        seen = set()
+        sources = []
+        
+        for chunk in chunks:
+            meta = chunk['metadata']
+            doc_id = meta.get('document_id')
+            page = meta.get('page_number')
+            key = (doc_id, page)
+            
+            if key not in seen:
+                seen.add(key)
+                sources.append({
+                    'document_id': doc_id,
+                    'filename': meta.get('filename', 'Unknown'),
+                    'page_number': page,
+                    'relevance_score': round(chunk['relevance_score'], 4),
+                    'chunk_id': chunk['chunk_id'],
+                })
+        
+        return sources
+    
+    def _store_message(
+        self,
+        session_id: int,
+        question: str,
+        answer: str,
+        sources: list[dict],
+    ) -> int:
+        """Store user question, AI answer, and sources in MySQL."""
+        # Store user message
+        user_msg = ChatMessage(
+            session_id=session_id,
+            role='user',
+            message=question,
+        )
+        db.session.add(user_msg)
+        db.session.flush()
+        
+        # Store assistant message
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role='assistant',
+            message=answer,
+        )
+        db.session.add(assistant_msg)
+        db.session.flush()
+        
+        # Store source citations
+        for source in sources:
+            msg_source = MessageSource(
+                message_id=assistant_msg.id,
+                document_id=source.get('document_id'),
+                page_number=source.get('page_number'),
+                chunk_id=source.get('chunk_id'),
+                relevance_score=source.get('relevance_score'),
+            )
+            db.session.add(msg_source)
+        
+        db.session.commit()
+        return assistant_msg.id
