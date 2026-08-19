@@ -55,18 +55,14 @@ def create_app():
     # Register global error handlers
     register_error_handlers(app)
 
-    # Create tables, run migrations, seed default data, and pre-warm embedding model
+    # Create tables, run migrations, and seed default data
     with app.app_context():
         db.create_all()
         _migrate_db()
         _seed_categories()
-        try:
-            from app.services.embedding_service import get_embedding_model
-            get_embedding_model()
-        except Exception as e:
-            logging.getLogger(__name__).warning(f'Could not pre-warm embedding model: {e}')
 
     return app
+
 
 
 def _migrate_db():
