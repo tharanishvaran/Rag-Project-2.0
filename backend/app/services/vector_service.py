@@ -83,13 +83,33 @@ class VectorService:
                     meta[k] = v
             metadatas.append(meta)
         
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-        )
-        
+        try:
+            collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas,
+            )
+        except Exception as e:
+            if 'dimension' in str(e).lower():
+                logger.warning(f'ChromaDB vector dimension mismatch ({e}). Resetting collection...')
+                client = get_chroma_client()
+                try:
+                    client.delete_collection(COLLECTION_NAME)
+                except Exception:
+                    pass
+                global _collection
+                _collection = None
+                collection = get_collection()
+                collection.add(
+                    ids=ids,
+                    embeddings=embeddings,
+                    documents=documents,
+                    metadatas=metadatas,
+                )
+            else:
+                raise e
+
         logger.info(f'Added {len(ids)} chunks to ChromaDB.')
         return ids
     

@@ -26,7 +26,6 @@ gunicorn==22.0.0
 Flask-Limiter==3.8.0
 
 # AI / Embeddings
-sentence-transformers==3.0.1
 numpy==1.26.4
 
 # Vector Database
