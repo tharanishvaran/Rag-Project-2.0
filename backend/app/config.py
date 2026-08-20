@@ -27,10 +27,20 @@ class Config:
     
     SQLALCHEMY_DATABASE_URI = _raw_db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    
+    _engine_options = {
         'pool_recycle': 300,
         'pool_pre_ping': True,
     }
+    if _raw_db_url.startswith('mysql') and ('tidb' in _raw_db_url.lower() or 'ssl' in _raw_db_url.lower() or 'aws' in _raw_db_url.lower()):
+        import ssl
+        try:
+            _ssl_ctx = ssl.create_default_context()
+            _engine_options['connect_args'] = {'ssl': _ssl_ctx}
+        except Exception:
+            pass
+
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_options
     
     # File Uploads
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
