@@ -32,7 +32,11 @@ def create_app():
     db.init_app(app)
     jwt.init_app(app)
     bcrypt.init_app(app)
-    cors.init_app(app, resources={r'/api/*': {'origins': '*'}})
+    cors.init_app(app, resources={r'/api/*': {
+        'origins': '*',
+        'allow_headers': ['Content-Type', 'Authorization'],
+        'methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    }})
 
     # Register blueprints
     from app.routes.auth import auth_bp

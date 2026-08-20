@@ -1,14 +1,38 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithToken } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const tokenParam = searchParams.get('token') || searchParams.get('access_token');
+    const emailParam = searchParams.get('email');
+
+    if (emailParam) {
+      setForm((prev) => ({ ...prev, email: emailParam }));
+    }
+
+    if (tokenParam) {
+      setLoading(true);
+      loginWithToken(tokenParam)
+        .then(() => {
+          navigate('/dashboard');
+        })
+        .catch((err) => {
+          setError(err.response?.data?.error || 'Invalid or expired login link.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +42,11 @@ export default function Login() {
       await login(form.email, form.password);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please verify credentials.');
+      if (!err.response) {
+        setError('Network Error: Cannot connect to Backend API. Ensure your backend server is running and VITE_API_BASE_URL is set to an HTTPS URL.');
+      } else {
+        setError(err.response?.data?.error || 'Login failed. Please verify email and password.');
+      }
     } finally {
       setLoading(false);
     }
