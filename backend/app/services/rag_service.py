@@ -95,8 +95,9 @@ class RAGService:
             logger.info(f'Sending {len(deduplicated)} chunks to Ollama as context...')
             try:
                 answer = self.ollama_service.generate_answer(context, question)
-            except RuntimeError as e:
-                raise RuntimeError(str(e))
+            except Exception as e:
+                logger.warning(f'Ollama API error: {e}')
+                raise RuntimeError("Failed to generate answer from Gemini API or local AI models. Please verify GEMINI_API_KEY is set in Render environment variables.")
         
         # Step 5: Prepare source citations
         sources = self._extract_sources(deduplicated)

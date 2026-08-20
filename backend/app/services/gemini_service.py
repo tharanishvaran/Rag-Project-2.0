@@ -33,9 +33,9 @@ class GeminiService:
         if not api_key:
             raise ValueError('GEMINI_API_KEY is not configured.')
 
-        preferred_model = current_app.config.get('GEMINI_MODEL', 'gemini-3.5-flash-lite')
+        preferred_model = current_app.config.get('GEMINI_MODEL', 'gemini-1.5-flash')
         max_tokens = current_app.config.get('GEMINI_MAX_TOKENS', 4096)
-        candidate_models = [preferred_model, 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest']
+        candidate_models = [preferred_model, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.5-flash']
         
         # Deduplicate while preserving order
         models_to_try = []
