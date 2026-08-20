@@ -17,7 +17,15 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = 86400  # 24 hours in seconds
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+    _raw_db_url = os.getenv('DATABASE_URL', '')
+    if _raw_db_url.startswith('postgres://'):
+        _raw_db_url = _raw_db_url.replace('postgres://', 'postgresql://', 1)
+    elif _raw_db_url.startswith('mysql://'):
+        _raw_db_url = _raw_db_url.replace('mysql://', 'mysql+pymysql://', 1)
+    elif not _raw_db_url:
+        _raw_db_url = 'sqlite:///app.db'
+    
+    SQLALCHEMY_DATABASE_URI = _raw_db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_recycle': 300,

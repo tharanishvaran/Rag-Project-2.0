@@ -56,10 +56,13 @@ def create_app():
     register_error_handlers(app)
 
     # Create tables, run migrations, and seed default data
-    with app.app_context():
-        db.create_all()
-        _migrate_db()
-        _seed_categories()
+    try:
+        with app.app_context():
+            db.create_all()
+            _migrate_db()
+            _seed_categories()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Database initialization warning: {e}")
 
     return app
 
