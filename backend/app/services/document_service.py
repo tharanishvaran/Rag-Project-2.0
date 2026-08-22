@@ -73,34 +73,107 @@ class DocumentService:
         db.session.add(document)
         db.session.commit()
         
-        # Dispatch Celery background processing task with fallback
-        try:
-            from app.tasks.document_tasks import process_document_task
-            process_document_task.delay(document.id)
-            logger.info(f"Dispatched Celery process_document_task for Document ID {document.id}")
-        except Exception as cel_err:
-            logger.warning(f"Celery dispatch notice for Doc {document.id}: {cel_err}. Triggering daemon fallback...")
-            import threading
-            try:
-                app_obj = current_app._get_current_object()
-                threading.Thread(
-                    target=self._fallback_background_process,
-                    args=(app_obj, document.id),
-                    daemon=True
-                ).start()
-            except Exception as err:
-                logger.error(f"Fallback daemon thread error for doc {document.id}: {err}")
+        # Dispatch background processing — skip Celery if Redis isn't running
+        self._dispatch_processing(document.id)
 
         return document
 
-    def _fallback_background_process(self, app, document_id: int):
-        """Fallback executor if Celery broker is offline during local dev."""
-        with app.app_context():
+    def _dispatch_processing(self, document_id: int):
+        """Fast dispatch: try Redis/Celery with 0.5s timeout, else instant daemon thread."""
+        # Step 1: Quick Redis ping (0.5s max) to avoid 30s connection hang
+        redis_alive = False
+        try:
+            import redis as redis_lib
+            redis_url = current_app.config.get('REDIS_URL', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+            r = redis_lib.from_url(redis_url, socket_connect_timeout=0.5, socket_timeout=0.5)
+            r.ping()
+            redis_alive = True
+        except Exception:
+            pass
+
+        if redis_alive:
             try:
                 from app.tasks.document_tasks import process_document_task
-                process_document_task(document_id)
+                process_document_task.delay(document_id)
+                logger.info(f"Dispatched Celery task for Document {document_id}")
+                return
             except Exception as e:
-                logger.error(f"Fallback background processing error: {e}")
+                logger.warning(f"Celery dispatch failed for Doc {document_id}: {e}")
+
+        # Step 2: Instant daemon thread fallback (0ms overhead)
+        logger.info(f"Using instant daemon thread for Document {document_id}")
+        import threading
+        try:
+            app_obj = current_app._get_current_object()
+            threading.Thread(
+                target=self._fallback_background_process,
+                args=(app_obj, document_id),
+                daemon=True
+            ).start()
+        except Exception as err:
+            logger.error(f"Daemon thread error for doc {document_id}: {err}")
+
+    def _fallback_background_process(self, app, document_id: int):
+        """Direct background processing without Celery overhead."""
+        with app.app_context():
+            try:
+                from datetime import datetime
+                doc = Document.query.get(document_id)
+                if not doc:
+                    return
+                
+                doc.upload_status = 'PROCESSING'
+                doc.processing_progress = 5
+                db.session.commit()
+
+                # Extract text
+                pages = self.doc_processor.extract_text(doc.file_path)
+                doc.processing_progress = 25
+                db.session.commit()
+
+                # Chunk
+                doc_metadata = {
+                    'document_id': doc.id,
+                    'user_id': doc.user_id,
+                    'category_id': doc.category_id,
+                    'filename': doc.original_filename,
+                }
+                chunks = self.chunking_service.chunk_pages(pages, doc_metadata)
+                if not chunks:
+                    doc.upload_status = 'FAILED'
+                    doc.error_message = 'No text could be extracted'
+                    db.session.commit()
+                    return
+
+                doc.total_chunks = len(chunks)
+                doc.processing_progress = 40
+                db.session.commit()
+
+                # Embed
+                texts = [c['text'] for c in chunks]
+                embeddings = self.embedding_service.embed_documents(texts)
+                doc.processing_progress = 80
+                db.session.commit()
+
+                # Store vectors
+                self.vector_service.add_chunks(chunks, embeddings)
+                
+                doc.upload_status = 'INDEXED'
+                doc.processing_progress = 100
+                doc.indexed_at = datetime.utcnow()
+                db.session.commit()
+                logger.info(f"Document {document_id} indexed successfully ({len(chunks)} chunks)")
+
+            except Exception as e:
+                logger.error(f"Background processing error for doc {document_id}: {e}")
+                try:
+                    doc = Document.query.get(document_id)
+                    if doc:
+                        doc.upload_status = 'FAILED'
+                        doc.error_message = str(e)[:500]
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
     
     def _process_document(self, document: Document, file_path: str):
         """Internal: extract, chunk, embed, and store a document."""
