@@ -64,12 +64,18 @@ def create_app():
     # Register global error handlers
     register_error_handlers(app)
 
-    # Create tables, run migrations, and seed default data
+    # Create tables, run migrations, and pre-warm ChromaDB
     try:
         with app.app_context():
             db.create_all()
             _migrate_db()
             _seed_categories()
+            # Pre-warm ChromaDB client so first document upload has zero cold-start delay
+            try:
+                from app.services.vector_service import get_collection
+                get_collection()
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"ChromaDB pre-warm notice: {e}")
     except Exception as e:
         logging.getLogger(__name__).warning(f"Database initialization warning: {e}")
 
@@ -87,6 +93,7 @@ def _migrate_db():
         db.session.rollback()
 
     doc_migrations = [
+        "ALTER TABLE documents MODIFY COLUMN upload_status VARCHAR(50) NOT NULL DEFAULT 'uploaded';",
         "ALTER TABLE documents ADD COLUMN processing_progress INT DEFAULT 0 NOT NULL;",
         "ALTER TABLE documents ADD COLUMN total_chunks INT DEFAULT 0 NOT NULL;",
         "ALTER TABLE documents ADD COLUMN error_message TEXT NULL;",
