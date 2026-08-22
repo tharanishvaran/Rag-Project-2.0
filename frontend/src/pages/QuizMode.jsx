@@ -404,7 +404,7 @@ export default function QuizMode() {
             <span>Generate Question Set</span>
           </button>
 
-          {loading && <LoadingSpinner message="Generating questions from syllabus notes..." />}
+          {loading && <LoadingSpinner variant="bar" message="Generating questions from syllabus notes..." />}
 
           {generatedText && (
             <div className="glass-card animate-fade-in" style={{ padding: 24 }}>

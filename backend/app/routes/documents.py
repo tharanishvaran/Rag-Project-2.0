@@ -93,6 +93,26 @@ def get_document(document_id):
     return success_response(data={'document': document.to_dict()})
 
 
+@documents_bp.route('/<int:document_id>/status', methods=['GET'])
+@jwt_required()
+def get_document_status(document_id):
+    """Retrieve detailed document processing lifecycle status & progress."""
+    user_id = int(get_jwt_identity())
+    document = document_service.get_document(document_id, user_id)
+
+    if not document:
+        return error_response('Document not found.', 404)
+
+    return success_response(data={
+        'document_id': document.id,
+        'filename': document.original_filename,
+        'status': document.upload_status.upper() if document.upload_status else 'UPLOADED',
+        'progress': document.processing_progress or 0,
+        'total_chunks': document.total_chunks or 0,
+        'error_message': document.error_message
+    })
+
+
 @documents_bp.route('/<int:document_id>', methods=['DELETE'])
 @jwt_required()
 def delete_document(document_id):

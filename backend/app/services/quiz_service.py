@@ -54,9 +54,33 @@ DOCUMENT CONTEXT:
 Generate {count} high-quality academic questions with model answer guidelines for each. Format cleanly with numbering, question text, options (if MCQ), and model answers."""
         return self._call_llm(prompt)
 
+    def _clean_subject_topic_phrase(self, topic: str, subject: str) -> str:
+        t_clean = (topic or '').strip()
+        s_clean = (subject or '').strip()
+        if not s_clean:
+            return t_clean
+        if not t_clean:
+            return s_clean
+        if s_clean.lower() in t_clean.lower():
+            return t_clean
+        return f"{t_clean} in {s_clean}"
+
+    def _clean_and_parse_json(self, raw: str) -> dict:
+        import re
+        cleaned = raw.strip()
+        cleaned = re.sub(r'^\*\([^)]+\)\*\s*', '', cleaned)
+        start_idx = cleaned.find('{')
+        end_idx = cleaned.rfind('}')
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            cleaned = cleaned[start_idx:end_idx + 1]
+        return json.loads(cleaned)
+
     def start_quiz(self, user_id: int, subject: str, topic: str, question_count: int = 5, category_id: int = None) -> dict:
+        topic_phrase = self._clean_subject_topic_phrase(topic, subject)
         context = self._get_context(user_id, f"{subject} {topic}", category_id)
-        prompt = f"""Generate an interactive quiz with {question_count} questions for subject "{subject}", topic "{topic}".
+        prompt = f"""You are a university examiner creating a multiple choice quiz for subject "{subject}" and topic "{topic}".
+IMPORTANT: Generate {question_count} questions with 4 unique options (A, B, C, D) relevant specifically to "{subject}" and "{topic}".
+Do NOT duplicate subject names redundantly in question text or options.
 
 DOCUMENT CONTEXT:
 {context}
@@ -68,8 +92,8 @@ Respond ONLY in valid JSON format matching:
   "questions": [
     {{
       "id": 1,
-      "question": "What is ...?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "question": "What is the primary function of {topic_phrase}?",
+      "options": ["Option A relevant to {topic}", "Option B relevant to {topic}", "Option C relevant to {topic}", "Option D relevant to {topic}"],
       "correct_option_index": 0,
       "correct_answer": "Option A explanation",
       "topic_tag": "{topic}"
@@ -90,17 +114,13 @@ Respond ONLY in valid JSON format matching:
         db.session.commit()
 
         try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            parsed = json.loads(cleaned.strip())
+            parsed = self._clean_and_parse_json(raw)
             parsed['attempt_id'] = attempt.id
+            if not parsed.get('questions'):
+                raise ValueError("No questions parsed")
             return parsed
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Quiz JSON parsing fallback for '{subject} - {topic}': {e}")
             return {
                 "attempt_id": attempt.id,
                 "subject": subject,
@@ -108,10 +128,28 @@ Respond ONLY in valid JSON format matching:
                 "questions": [
                     {
                         "id": 1,
-                        "question": f"Explain the core concept of {topic} in {subject}.",
-                        "options": ["Inheritance", "Polymorphism", "Encapsulation", "Abstraction"],
+                        "question": f"What is the core principle of {topic_phrase}?",
+                        "options": [
+                            f"Standard implementation of {topic}",
+                            f"Theoretical structure of {topic}",
+                            f"Optimized processing of {topic}",
+                            f"Alternative framework for {topic}"
+                        ],
                         "correct_option_index": 0,
-                        "correct_answer": "Concept explanation",
+                        "correct_answer": f"Standard implementation of {topic_phrase}.",
+                        "topic_tag": topic
+                    },
+                    {
+                        "id": 2,
+                        "question": f"Which component is essential for {topic_phrase}?",
+                        "options": [
+                            f"{topic} Execution Module",
+                            f"{subject} Control Layer",
+                            f"Data Pipeline for {topic}",
+                            f"Interface layer for {topic}"
+                        ],
+                        "correct_option_index": 0,
+                        "correct_answer": f"{topic} Execution Module performs key operations.",
                         "topic_tag": topic
                     }
                 ]
@@ -134,14 +172,7 @@ Respond ONLY in valid JSON format matching:
 }}"""
         raw = self._call_llm(prompt)
         try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            eval_data = json.loads(cleaned.strip())
+            eval_data = self._clean_and_parse_json(raw)
         except Exception:
             eval_data = {
                 "is_correct": len(user_answer.strip()) > 10,
@@ -204,11 +235,7 @@ Respond ONLY in valid JSON format matching:
             else:
                 weak_topics.append(item)
 
-        # Fallback defaults if no quizzes taken yet
-        if not strong_topics and not weak_topics:
-            strong_topics = [{'topic': 'OOP Fundamentals', 'accuracy': 85.0, 'attempts': 10}]
-            weak_topics = [{'topic': 'Exception Handling', 'accuracy': 45.0, 'attempts': 8}]
-
+        # Return empty lists if no quizzes taken yet for this user
         return {
             'questions_attempted': total_attempted,
             'correct_questions': correct_count,

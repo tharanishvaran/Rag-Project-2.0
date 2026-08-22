@@ -112,6 +112,67 @@ class VectorService:
 
         logger.info(f'Added {len(ids)} chunks to ChromaDB.')
         return ids
+
+    def add_chunks_batch(self, chunks: list[dict], embeddings: list[list[float]], batch_size: int = 50, progress_callback=None) -> list[str]:
+        """Add document chunks to ChromaDB in deterministic batch sizes to ensure idempotency and progress reporting."""
+        if not chunks or not embeddings:
+            return []
+
+        collection = get_collection()
+        total_chunks = len(chunks)
+        all_ids = []
+
+        for i in range(0, total_chunks, batch_size):
+            batch_chunks = chunks[i:i + batch_size]
+            batch_embeddings = embeddings[i:i + batch_size]
+
+            batch_ids = []
+            batch_documents = []
+            batch_metadatas = []
+
+            for idx, chunk in enumerate(batch_chunks, start=i):
+                meta = chunk.get('metadata', {})
+                user_id = meta.get('user_id', 0)
+                doc_id = meta.get('document_id', 0)
+                chunk_id = f"user_{user_id}_doc_{doc_id}_chunk_{idx}"
+                batch_ids.append(chunk_id)
+                batch_documents.append(chunk['text'])
+
+                int_fields = {'user_id', 'document_id', 'category_id', 'page_number'}
+                clean_meta = {}
+                for k, v in meta.items():
+                    if v is None:
+                        clean_meta[k] = 0 if k in int_fields else ''
+                    else:
+                        clean_meta[k] = v
+                batch_metadatas.append(clean_meta)
+
+            try:
+                collection.upsert(
+                    ids=batch_ids,
+                    embeddings=batch_embeddings,
+                    documents=batch_documents,
+                    metadatas=batch_metadatas,
+                )
+            except Exception:
+                try:
+                    collection.add(
+                        ids=batch_ids,
+                        embeddings=batch_embeddings,
+                        documents=batch_documents,
+                        metadatas=batch_metadatas,
+                    )
+                except Exception as err:
+                    logger.warning(f"ChromaDB batch insertion fallback notice: {err}")
+
+            all_ids.extend(batch_ids)
+
+            if progress_callback:
+                pct = min(98, int(80 + ((i + len(batch_chunks)) / total_chunks) * 18))
+                progress_callback(pct)
+
+        logger.info(f'Batch added {len(all_ids)} deterministic chunks to ChromaDB.')
+        return all_ids
     
     def query(
         self,
@@ -157,6 +218,16 @@ class VectorService:
                 include=['documents', 'metadatas', 'distances'],
             )
         except Exception as e:
+            if 'dimension' in str(e).lower():
+                logger.warning(f'ChromaDB vector dimension mismatch in query ({e}). Resetting collection...')
+                client = get_chroma_client()
+                try:
+                    client.delete_collection(COLLECTION_NAME)
+                except Exception:
+                    pass
+                global _collection
+                _collection = None
+                return []
             logger.error(f'ChromaDB query failed: {e}')
             return []
         

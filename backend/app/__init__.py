@@ -38,6 +38,11 @@ def create_app():
         'methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
     }})
 
+    # Bind Celery
+    from app.celery_app import make_celery
+    celery = make_celery(app)
+    app.celery = celery
+
     # Register blueprints
     from app.routes.auth import auth_bp
     from app.routes.documents import documents_bp
@@ -73,14 +78,27 @@ def create_app():
 
 
 def _migrate_db():
-    """Ensure missing columns like avatar_url are added to MySQL tables."""
+    """Ensure missing columns like avatar_url and document progress fields exist."""
     from sqlalchemy import text
     try:
         db.session.execute(text("ALTER TABLE users ADD COLUMN avatar_url LONGTEXT NULL;"))
         db.session.commit()
-        logging.getLogger(__name__).info("Migrated: Added avatar_url column to users table.")
     except Exception:
         db.session.rollback()
+
+    doc_migrations = [
+        "ALTER TABLE documents ADD COLUMN processing_progress INT DEFAULT 0 NOT NULL;",
+        "ALTER TABLE documents ADD COLUMN total_chunks INT DEFAULT 0 NOT NULL;",
+        "ALTER TABLE documents ADD COLUMN error_message TEXT NULL;",
+        "ALTER TABLE documents ADD COLUMN updated_at DATETIME NULL;",
+        "ALTER TABLE documents ADD COLUMN indexed_at DATETIME NULL;",
+    ]
+    for stmt in doc_migrations:
+        try:
+            db.session.execute(text(stmt))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 

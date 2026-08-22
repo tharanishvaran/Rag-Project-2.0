@@ -2,7 +2,7 @@ import os
 from flask import current_app
 
 
-ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'pptx'}
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'pptx', 'png', 'jpg', 'jpeg', 'webp'}
 
 
 def allowed_file(filename: str) -> bool:

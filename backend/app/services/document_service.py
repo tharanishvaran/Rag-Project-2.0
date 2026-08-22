@@ -1,5 +1,6 @@
 import os
 import uuid
+import re
 import logging
 from werkzeug.utils import secure_filename
 from flask import current_app
@@ -39,42 +40,67 @@ class DocumentService:
         upload_folder = os.path.normpath(upload_folder)
         os.makedirs(upload_folder, exist_ok=True)
         
-        # Generate unique stored filename
-        original_filename = secure_filename(file.filename)
-        ext = os.path.splitext(original_filename)[1].lower()
+        # Safely preserve user's original filename while handling edge cases
+        raw_name = file.filename or "uploaded_document"
+        clean_display_name = os.path.basename(raw_name).strip()
+        clean_display_name = re.sub(r'[\x00-\x1f\x7f]', '', clean_display_name)
+        if not clean_display_name:
+            clean_display_name = "uploaded_document.pdf"
+            
+        ext = os.path.splitext(clean_display_name)[1].lower()
+        if not ext:
+            sec_name = secure_filename(raw_name)
+            ext = os.path.splitext(sec_name)[1].lower() or '.pdf'
+
+        from app.services.storage_service import get_storage_service
+        storage_service = get_storage_service()
+
         stored_filename = f"{uuid.uuid4().hex}{ext}"
-        file_path = os.path.join(upload_folder, stored_filename)
+        file_path = storage_service.save_file(file, stored_filename)
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
         
-        # Save file to disk
-        file.save(file_path)
-        file_size = os.path.getsize(file_path)
-        
-        # Create document record in MySQL
+        # Create document record in MySQL with UPLOADED status & 0% progress
         document = Document(
             user_id=user_id,
             category_id=category_id,
-            original_filename=original_filename,
+            original_filename=clean_display_name,
             stored_filename=stored_filename,
             file_path=file_path,
             file_size=file_size,
-            upload_status='processing',
+            upload_status='UPLOADED',
+            processing_progress=0,
         )
         db.session.add(document)
         db.session.commit()
         
-        # Process the Document (extract → chunk → embed → store)
+        # Dispatch Celery background processing task with fallback
         try:
-            self._process_document(document, file_path)
-            document.upload_status = 'completed'
-            db.session.commit()
-            logger.info(f'Document {document.id} processed successfully.')
-        except Exception as e:
-            document.upload_status = 'failed'
-            document.processing_error = str(e)[:500]
-            db.session.commit()
-            logger.error(f'Document {document.id} processing failed: {e}')
-        
+            from app.tasks.document_tasks import process_document_task
+            process_document_task.delay(document.id)
+            logger.info(f"Dispatched Celery process_document_task for Document ID {document.id}")
+        except Exception as cel_err:
+            logger.warning(f"Celery dispatch notice for Doc {document.id}: {cel_err}. Triggering daemon fallback...")
+            import threading
+            try:
+                app_obj = current_app._get_current_object()
+                threading.Thread(
+                    target=self._fallback_background_process,
+                    args=(app_obj, document.id),
+                    daemon=True
+                ).start()
+            except Exception as err:
+                logger.error(f"Fallback daemon thread error for doc {document.id}: {err}")
+
         return document
+
+    def _fallback_background_process(self, app, document_id: int):
+        """Fallback executor if Celery broker is offline during local dev."""
+        with app.app_context():
+            try:
+                from app.tasks.document_tasks import process_document_task
+                process_document_task(document_id)
+            except Exception as e:
+                logger.error(f"Fallback background processing error: {e}")
     
     def _process_document(self, document: Document, file_path: str):
         """Internal: extract, chunk, embed, and store a document."""
@@ -120,12 +146,12 @@ class DocumentService:
         except Exception as e:
             logger.error(f'Failed to delete ChromaDB embeddings for doc {document_id}: {e}')
         
-        # 2. Delete physical file
-        if document.file_path and os.path.exists(document.file_path):
-            try:
-                os.remove(document.file_path)
-            except OSError as e:
-                logger.error(f'Failed to delete file {document.file_path}: {e}')
+        # 2. Delete physical file via StorageService
+        try:
+            from app.services.storage_service import get_storage_service
+            get_storage_service().delete_file(document.stored_filename)
+        except Exception as e:
+            logger.error(f'Failed to delete file for doc {document_id}: {e}')
         
         # 3. Delete MySQL record
         db.session.delete(document)

@@ -73,7 +73,7 @@ export default function Sidebar() {
               <Zap size={15} className="promo-icon" />
               <span>RAG Engine 2.0</span>
             </div>
-            <p>Powered by Gemini • Developed by Tharanish</p>
+            <p>Developed by Tharanish</p>
           </div>
         </nav>
 

@@ -1,20 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { documentService } from '../services/documentService';
 import { categoryService } from '../services/categoryService';
-import LoadingSpinner from '../components/LoadingSpinner';
 import { 
   FileText, 
   UploadCloud, 
   Trash2, 
-  Filter, 
   CheckCircle2, 
   AlertCircle, 
   Sparkles, 
   Search,
   FolderOpen,
-  Plus
+  Plus,
+  X,
+  FileCheck
 } from 'lucide-react';
 import './Documents.css';
+
+const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'doc', 'txt', 'md', 'pptx', 'png', 'jpg', 'jpeg', 'webp'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 function formatSize(bytes) {
   if (!bytes) return '';
@@ -30,10 +33,12 @@ export default function Documents() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const fileRef = useRef();
 
   const fetchAll = async () => {
@@ -42,8 +47,8 @@ export default function Documents() {
         documentService.getAll(filterCat || undefined),
         categoryService.getAll(),
       ]);
-      setDocuments(docsRes.data.data.documents);
-      setCategories(catRes.data.data.categories);
+      setDocuments(docsRes.data.data.documents || []);
+      setCategories(catRes.data.data.categories || []);
     } catch { 
       setError('Failed to fetch document repository.'); 
     } finally { 
@@ -53,26 +58,130 @@ export default function Documents() {
 
   useEffect(() => { fetchAll(); }, [filterCat]);
 
-  const handleUpload = async (files) => {
-    if (!files || files.length === 0) return;
+  const MAX_CONCURRENT_UPLOADS = 3;
+
+  // Poll for document status updates every 2.5s while active documents are in UPLOADED or PROCESSING states
+  useEffect(() => {
+    const hasActiveProcessing = documents.some(
+      d => d.upload_status === 'UPLOADED' || d.upload_status === 'PROCESSING' || d.upload_status === 'uploaded' || d.upload_status === 'processing'
+    );
+
+    if (!hasActiveProcessing) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const docsRes = await documentService.getAll(filterCat || undefined);
+        const updatedDocs = docsRes.data?.data?.documents || [];
+        setDocuments(updatedDocs);
+      } catch (err) {
+        console.error('Document polling notice:', err);
+      }
+    }, 2500);
+
+    return () => clearInterval(pollInterval);
+  }, [documents, filterCat]);
+
+  const uploadFiles = async (filesToUpload, categoryId = selectedCategory) => {
+    if (!filesToUpload || filesToUpload.length === 0) return;
     setError(''); setSuccess('');
-    setUploading(true); setUploadProgress(0);
+    setUploading(true); 
+    setUploadProgress(10);
+    setUploadStage(`Processing ${filesToUpload.length} file(s) with max ${MAX_CONCURRENT_UPLOADS} concurrent uploads...`);
 
-    const formData = new FormData();
-    Array.from(files).forEach(f => formData.append('files', f));
-    if (selectedCategory) formData.append('category_id', selectedCategory);
+    const queue = [...filesToUpload];
+    const results = [];
+    let completedCount = 0;
 
-    try {
-      await documentService.upload(formData, e => {
-        if (e.total) setUploadProgress(Math.round(e.loaded / e.total * 100));
-      });
-      setSuccess('PDF document uploaded & indexed into vector database!');
-      fetchAll();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Upload failed. Please try again.');
-    } finally { 
-      setUploading(false); setUploadProgress(0); 
+    const worker = async () => {
+      while (queue.length > 0) {
+        const file = queue.shift();
+        const formData = new FormData();
+        formData.append('files', file);
+        if (categoryId) formData.append('category_id', categoryId);
+
+        try {
+          const res = await documentService.upload(formData);
+          results.push({ file: file.name, success: true, res });
+        } catch (err) {
+          results.push({ file: file.name, success: false, error: err.response?.data?.error || err.message });
+        }
+        completedCount++;
+        setUploadProgress(Math.round((completedCount / filesToUpload.length) * 100));
+        setUploadStage(`Uploaded ${completedCount} of ${filesToUpload.length} file(s)...`);
+      }
+    };
+
+    const workers = [];
+    const numWorkers = Math.min(MAX_CONCURRENT_UPLOADS, filesToUpload.length);
+    for (let i = 0; i < numWorkers; i++) {
+      workers.push(worker());
     }
+
+    await Promise.all(workers);
+
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
+
+    setUploadProgress(100);
+
+    if (failed.length === 0) {
+      setSuccess(`${successful.length} file(s) uploaded! Celery background indexing in progress...`);
+    } else if (successful.length > 0) {
+      setSuccess(`${successful.length} file(s) uploaded.`);
+      setError(`Failed: ${failed.map(f => f.file).join(', ')}.`);
+    } else {
+      setError(`Upload failed. Please check file format or backend connection.`);
+    }
+
+    setSelectedFiles([]);
+    setUploading(false); 
+    setUploadProgress(0); 
+    setUploadStage('');
+    if (fileRef.current) fileRef.current.value = '';
+    fetchAll();
+  };
+
+  const handleFileSelect = (incomingFiles) => {
+    if (!incomingFiles || incomingFiles.length === 0) return;
+    setError(''); setSuccess('');
+    
+    const valid = [];
+    const invalid = [];
+
+    Array.from(incomingFiles).forEach(file => {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        invalid.push(`${file.name}: Unsupported file format.`);
+      } else if (file.size > MAX_FILE_SIZE) {
+        invalid.push(`${file.name}: Exceeds 50MB file size limit.`);
+      } else {
+        valid.push(file);
+      }
+    });
+
+    if (invalid.length > 0) {
+      setError(invalid.join(' '));
+    }
+
+    if (valid.length > 0) {
+      setSelectedFiles(valid);
+      // Automatically trigger upload & vector indexing immediately
+      uploadFiles(valid);
+    }
+
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUploadSubmit = () => {
+    if (selectedFiles.length === 0) {
+      setError('Please select or browse at least one valid document to upload.');
+      return;
+    }
+    uploadFiles(selectedFiles);
   };
 
   const handleDelete = async (id, name) => {
@@ -87,10 +196,8 @@ export default function Documents() {
   };
 
   const filteredDocs = documents.filter(doc => 
-    doc.original_filename.toLowerCase().includes(searchQuery.toLowerCase())
+    doc.original_filename?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) return <LoadingSpinner message="Accessing Document Repository..." />;
 
   return (
     <div className="documents-page animate-fade-in">
@@ -103,7 +210,7 @@ export default function Documents() {
       <div className="upload-section glass-card">
         <div className="upload-section-header">
           <div className="section-title">
-            <UploadCloud size={20} className="section-icon" />
+            <UploadCloud size={20} className="section-icon text-primary" />
             <h3>Upload Study Materials & Multi-Format Documents</h3>
           </div>
           <span className="badge badge-primary">PDF • Word (.docx) • Text (.txt) • Markdown (.md) • PowerPoint (.pptx)</span>
@@ -113,7 +220,7 @@ export default function Documents() {
           className={`upload-zone-modern ${dragOver ? 'drag-over' : ''}`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files); }}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFileSelect(e.dataTransfer.files); }}
           onClick={() => fileRef.current?.click()}
         >
           <div className="upload-icon-circle">
@@ -121,21 +228,53 @@ export default function Documents() {
           </div>
           <div className="upload-text-content">
             <h4>Drag & Drop your Study Materials here</h4>
-            <p>Supports PDF, Word (.docx), Text (.txt), Markdown (.md), and PowerPoint (.pptx) up to 50MB per file</p>
+            <p>Supports PDF, Word (.docx), Text (.txt), Markdown (.md), PowerPoint (.pptx), and Images up to 50MB</p>
           </div>
-          <button className="btn btn-secondary btn-sm" type="button">
+          <button className="btn btn-secondary btn-sm" type="button" onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}>
             Browse Files
           </button>
-          <input ref={fileRef} type="file" multiple accept=".pdf,.docx,.doc,.txt,.md,.pptx" hidden onChange={e => handleUpload(e.target.files)} />
+          <input 
+            ref={fileRef} 
+            type="file" 
+            multiple 
+            accept=".pdf,.docx,.doc,.txt,.md,.pptx,.png,.jpg,.jpeg,.webp" 
+            hidden 
+            onChange={e => handleFileSelect(e.target.files)} 
+          />
         </div>
 
-
+        {/* Selected Files Queue */}
+        {selectedFiles.length > 0 && (
+          <div className="selected-file-queue">
+            <div className="selected-file-header">
+              <span>Ready for Upload ({selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''})</span>
+              <button className="btn btn-ghost btn-sm" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => setSelectedFiles([])}>Clear All</button>
+            </div>
+            <div className="selected-file-items">
+              {selectedFiles.map((file, idx) => (
+                <div key={idx} className="selected-file-chip">
+                  <div className="selected-file-meta">
+                    <FileCheck size={16} className="text-primary" />
+                    <span className="selected-file-name" title={file.name}>{file.name}</span>
+                    <span className="selected-file-size">({formatSize(file.size)})</span>
+                  </div>
+                  {!uploading && (
+                    <button className="remove-file-btn" type="button" onClick={() => removeFile(idx)}>
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="upload-controls">
           <select 
             className="input category-select" 
             value={selectedCategory} 
             onChange={e => setSelectedCategory(e.target.value)}
+            disabled={uploading}
           >
             <option value="">Choose category (optional)...</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -143,25 +282,29 @@ export default function Documents() {
 
           <button 
             className="btn btn-primary" 
-            onClick={() => fileRef.current?.click()} 
-            disabled={uploading}
+            onClick={handleUploadSubmit} 
+            disabled={uploading || selectedFiles.length === 0}
           >
             {uploading ? (
               <>
                 <Sparkles className="spin" size={16} />
-                <span>Uploading {uploadProgress}%</span>
+                <span>Processing... {uploadProgress}%</span>
               </>
             ) : (
               <>
                 <Plus size={18} />
-                <span>Upload PDF</span>
+                <span>Start Upload & Vector Indexing</span>
               </>
             )}
           </button>
         </div>
 
         {uploading && (
-          <div className="upload-progress-wrapper">
+          <div className="upload-progress-wrapper animate-fade-in">
+            <div className="upload-status-text">
+              <span>{uploadStage || 'Processing file upload...'}</span>
+              <span>{uploadProgress}%</span>
+            </div>
             <div className="progress-bar-track">
               <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
             </div>
@@ -215,12 +358,22 @@ export default function Documents() {
         </div>
       </div>
 
-      {/* Document Grid */}
-      {filteredDocs.length === 0 ? (
+      {/* Document Grid / Skeleton Loaders */}
+      {loading ? (
+        <div className="doc-grid">
+          {[1, 2, 3, 4].map(n => (
+            <div key={n} className="doc-card glass-card skeleton-card" style={{ height: 160, padding: 20 }}>
+              <div className="skeleton-title" />
+              <div className="skeleton-text" style={{ width: '80%' }} />
+              <div className="skeleton-text" style={{ width: '40%' }} />
+            </div>
+          ))}
+        </div>
+      ) : filteredDocs.length === 0 ? (
         <div className="empty-state glass-card">
           <FolderOpen size={48} className="empty-icon" />
           <h3>No documents found</h3>
-          <p>{searchQuery ? 'No documents match your search filter.' : 'Upload your first PDF document to begin asking questions.'}</p>
+          <p>{searchQuery ? 'No documents match your search filter.' : 'Upload your first document to begin asking RAG questions.'}</p>
         </div>
       ) : (
         <div className="doc-grid">
@@ -231,10 +384,12 @@ export default function Documents() {
                   <FileText size={24} />
                 </div>
                 <span className={`badge ${
-                  doc.upload_status === 'completed' ? 'badge-success' : 
-                  doc.upload_status === 'failed' ? 'badge-danger' : 'badge-warning'
+                  (doc.upload_status === 'INDEXED' || doc.upload_status === 'completed') ? 'badge-success' : 
+                  (doc.upload_status === 'FAILED' || doc.upload_status === 'failed') ? 'badge-danger' : 'badge-warning'
                 }`}>
-                  {doc.upload_status}
+                  {doc.upload_status === 'PROCESSING' || doc.upload_status === 'processing'
+                    ? `PROCESSING ${doc.processing_progress || 0}%`
+                    : (doc.upload_status || 'UPLOADED').toUpperCase()}
                 </span>
               </div>
 

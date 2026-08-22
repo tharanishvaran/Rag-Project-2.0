@@ -5,14 +5,22 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are Smart Doc AI, an intelligent academic assistant helping college students.
+SYSTEM_PROMPT = """You are Smart Doc AI, an intelligent RAG academic assistant.
 
-Instructions:
-- Prioritize information from the student's uploaded document context below whenever available, citing sources.
-- If the question is NOT covered by the provided document context (or no documents match), answer the question completely and accurately using your general knowledge.
-- Provide thorough, clear, detailed, and complete explanations. Never cut off or abbreviate code snippets or answers.
-- Always provide complete, fully runnable code blocks when explaining programs or algorithms.
-- Structure your response cleanly using headings, bullet points, and code blocks for maximum clarity."""
+CRITICAL DOCUMENT CONTEXT PRIORITIZATION RULES:
+1. TOP & ABSOLUTE PRIORITY (Document Context):
+   - Whenever "CONTEXT FROM DOCUMENTS" is provided below, you MUST base your answer FIRST AND FOREMOST on that context.
+   - Extract exact details, definitions, explanations, formulas, code snippets, and key concepts directly from the document context.
+   - Do NOT append repetitive inline source citations like "[Source: filename.pdf, Page X]" or bracketed filenames after lines or bullets in your response text.
+
+2. SECONDARY / FALLBACK PRIORITY (General Knowledge):
+   - ONLY if the provided document context is empty OR does NOT contain the answer to the student's question, you may use your general knowledge.
+   - When using general knowledge because document context was insufficient, start your answer with:
+     "*(Note: The exact answer was not found in your uploaded documents, so here is a general academic explanation:)*"
+
+3. RESPONSE STYLE:
+   - Provide clear, thorough, structured, and complete academic explanations.
+   - Never truncate code snippets or cut off explanations prematurely."""
 
 
 class GeminiService:
@@ -33,14 +41,14 @@ class GeminiService:
         if not api_key:
             raise ValueError('GEMINI_API_KEY is not configured.')
 
-        preferred_model = current_app.config.get('GEMINI_MODEL', 'gemini-1.5-flash')
+        preferred_model = current_app.config.get('GEMINI_MODEL', 'gemini-2.5-flash')
         max_tokens = current_app.config.get('GEMINI_MAX_TOKENS', 4096)
-        candidate_models = [preferred_model, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.5-flash']
+        candidate_models = [preferred_model, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash']
         
         # Deduplicate while preserving order
         models_to_try = []
         for m in candidate_models:
-            if m not in models_to_try:
+            if m and m not in models_to_try:
                 models_to_try.append(m)
 
         mode_instructions = {
@@ -97,19 +105,19 @@ ANSWER:"""
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}'
             try:
                 logger.info(f'Trying Gemini model ({model_name})...')
-                response = requests.post(url, json=payload, timeout=10)
+                response = requests.post(url, json=payload, timeout=30)
                 if response.status_code == 200:
                     data = response.json()
                     candidates = data.get('candidates', [])
                     if candidates and 'content' in candidates[0]:
                         parts = candidates[0]['content'].get('parts', [])
-                        if parts and 'text' in parts[0]:
-                            answer = parts[0]['text'].strip()
-                            if answer:
-                                logger.info(f'Gemini model ({model_name}) responded successfully!')
-                                return answer
+                        text_parts = [p['text'] for p in parts if 'text' in p and p['text'].strip()]
+                        if text_parts:
+                            answer = "\n".join(text_parts).strip()
+                            logger.info(f'Gemini model ({model_name}) responded successfully!')
+                            return answer
                 else:
-                    logger.warning(f'Gemini model ({model_name}) status {response.status_code}')
+                    logger.warning(f'Gemini model ({model_name}) status {response.status_code}: {response.text[:150]}')
                     last_error = f'HTTP {response.status_code}: {response.text[:150]}'
             except Exception as e:
                 logger.warning(f'Gemini model ({model_name}) error: {e}')

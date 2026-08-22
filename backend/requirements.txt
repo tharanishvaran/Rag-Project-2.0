@@ -21,8 +21,10 @@ python-pptx==1.0.0
 Pillow==10.4.0
 pytesseract==0.3.10
 
-# Production Server & Utilities
+# Production Server, Task Queue & Utilities
 gunicorn==22.0.0
+celery==5.4.0
+redis==5.0.7
 Flask-Limiter==3.8.0
 
 # AI / Embeddings

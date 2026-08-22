@@ -52,6 +52,28 @@ class RAGService:
             past_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.asc()).limit(10).all()
             history = [{'role': m.role, 'content': m.message} for m in past_messages]
 
+        # Fast short-circuit for common conversational greetings (< 0.05s response)
+        greetings_map = {
+            'hi': "Hello! 👋 How can I assist you with your study materials today?",
+            'hello': "Hello! 👋 I'm SmartDoc AI, your academic assistant. How can I help you today?",
+            'hey': "Hey there! 👋 What topic or document would you like to explore today?",
+            'hi there': "Hello! 👋 How can I help with your exam prep or document questions?",
+            'good morning': "Good morning! ☀️ Ready to study or review your exam materials?",
+            'good evening': "Good evening! 🌙 How can I assist with your studies today?",
+            'how are you': "I'm doing great and ready to help you study! What would you like to review today?",
+            'who are you': "I'm SmartDoc AI, an intelligent RAG academic assistant designed to help you analyze study materials, generate quizzes, and prepare for exams!",
+            'help': "I can help you analyze study documents, generate practice quizzes, build study plans, and answer subject-specific questions. What would you like to do?"
+        }
+        clean_prompt = question.strip().lower().rstrip('!?.,')
+        if clean_prompt in greetings_map:
+            greeting_resp = greetings_map[clean_prompt]
+            msg_id = self._store_message(session_id, question, greeting_resp, [])
+            return {
+                'answer': greeting_resp,
+                'sources': [],
+                'message_id': msg_id,
+            }
+
         # Step 1: Embed the question
         logger.info(f'Embedding question: "{question[:80]}..." (mode={explanation_mode}, lang={language})')
         query_embedding = self.embedding_service.embed_query(question)
@@ -99,6 +121,13 @@ class RAGService:
                 logger.warning(f'Ollama API error: {e}')
                 raise RuntimeError("Failed to generate answer from Gemini API or local AI models. Please verify GEMINI_API_KEY is set in Render environment variables.")
         
+        import re
+        if answer:
+            # Strip out any repetitive inline [Source: ...] or [Source X: ...] brackets from answer text
+            answer = re.sub(r'\s*\[Source:\s*[^\]]+\]', '', answer)
+            answer = re.sub(r'\s*\[Source\s*\d+:\s*[^\]]+\]', '', answer)
+            answer = answer.strip()
+
         # Step 5: Prepare source citations
         sources = self._extract_sources(deduplicated)
         

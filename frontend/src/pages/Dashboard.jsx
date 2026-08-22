@@ -108,7 +108,7 @@ export default function Dashboard() {
           <div className="grid-3" style={{ marginBottom: 24 }}>
             <div className="stat-card glass-card">
               <div className="stat-body">
-                <div className="stat-value">{quizStats.questions_attempted || 85}</div>
+                <div className="stat-value">{quizStats.questions_attempted ?? 0}</div>
                 <div className="stat-label">Questions Attempted</div>
                 <div className="stat-subtext">Across practice quizzes</div>
               </div>
@@ -116,7 +116,7 @@ export default function Dashboard() {
 
             <div className="stat-card glass-card">
               <div className="stat-body">
-                <div className="stat-value text-success">{quizStats.correct_questions || 67}</div>
+                <div className="stat-value text-success">{quizStats.correct_questions ?? 0}</div>
                 <div className="stat-label">Correct Answers</div>
                 <div className="stat-subtext">Verified responses</div>
               </div>
@@ -124,7 +124,7 @@ export default function Dashboard() {
 
             <div className="stat-card glass-card">
               <div className="stat-body">
-                <div className="stat-value text-primary">{quizStats.accuracy || 78.8}%</div>
+                <div className="stat-value text-primary">{quizStats.accuracy ?? 0}%</div>
                 <div className="stat-label">Overall Accuracy</div>
                 <div className="stat-subtext">Mastery rating</div>
               </div>
@@ -138,12 +138,16 @@ export default function Dashboard() {
                 <CheckCircle2 size={18} /> Strong Topics
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {quizStats.strong_topics?.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: 8 }}>
-                    <span>✓ {item.topic}</span>
-                    <span className="badge badge-success">{item.accuracy}% Accuracy</span>
-                  </div>
-                ))}
+                {(!quizStats.strong_topics || quizStats.strong_topics.length === 0) ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No strong topics recorded yet. Take an AI Quiz!</p>
+                ) : (
+                  quizStats.strong_topics.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: 8 }}>
+                      <span>✓ {item.topic}</span>
+                      <span className="badge badge-success">{item.accuracy}% Accuracy</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -153,12 +157,16 @@ export default function Dashboard() {
                 <AlertTriangle size={18} /> Weak Topics Identified
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {quizStats.weak_topics?.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8 }}>
-                    <span>⚠ {item.topic}</span>
-                    <span className="badge badge-danger">{item.accuracy}% Accuracy</span>
-                  </div>
-                ))}
+                {(!quizStats.weak_topics || quizStats.weak_topics.length === 0) ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No weak topics identified. Keep practicing!</p>
+                ) : (
+                  quizStats.weak_topics.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8 }}>
+                      <span>⚠ {item.topic}</span>
+                      <span className="badge badge-danger">{item.accuracy}% Accuracy</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

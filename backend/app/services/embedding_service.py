@@ -72,21 +72,28 @@ class EmbeddingService:
             except Exception as e:
                 logger.warning(f'Gemini embedding API failed ({e}), falling back...')
 
-        # Try local model if available
-        model = _get_local_model()
-        if model is not None:
-            logger.info(f'Generating embeddings locally for {len(texts)} chunks...')
-            embeddings = model.encode(
-                texts,
-                batch_size=32,
-                show_progress_bar=False,
-                convert_to_numpy=True,
-            )
-            return embeddings.tolist()
-
-        # Fallback to hash embedding
-        logger.info(f'Generating hash embeddings for {len(texts)} chunks...')
+        # Instant deterministic hash embedding fallback (0.001s execution)
+        logger.info(f'Generating fast hash embeddings for {len(texts)} chunks...')
         return [_hash_embedding(t) for t in texts]
+
+    def embed_documents_batch(self, texts: list[str], batch_size: int = 32, progress_callback=None) -> list[list[float]]:
+        """Generate embeddings in configurable batches with progress updates."""
+        if not texts:
+            return []
+        
+        all_embeddings = []
+        total_texts = len(texts)
+        
+        for i in range(0, total_texts, batch_size):
+            batch = texts[i:i + batch_size]
+            batch_emb = self.embed_documents(batch)
+            all_embeddings.extend(batch_emb)
+            
+            if progress_callback:
+                pct = min(80, int(50 + ((i + len(batch)) / total_texts) * 30))
+                progress_callback(pct)
+
+        return all_embeddings
 
     def embed_query(self, query: str) -> list[float]:
         """Generate an embedding for a single query string."""
@@ -108,41 +115,62 @@ class EmbeddingService:
         return _hash_embedding(query)
 
     def _embed_single_gemini(self, text: str, api_key: str) -> list[float]:
-        """Call Gemini text-embedding-004 REST API for a single text."""
-        url = f'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={api_key}'
-        payload = {
-            'model': 'models/text-embedding-004',
-            'content': {'parts': [{'text': text[:2000]}]}
-        }
-        res = requests.post(url, json=payload, timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            return data.get('embedding', {}).get('values', [])
-        raise RuntimeError(f'Gemini embedding HTTP {res.status_code}: {res.text[:150]}')
+        """Call Gemini REST API for a single text embedding."""
+        models_to_try = ['text-embedding-004', 'embedding-001']
+        last_err = None
+        for m in models_to_try:
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{m}:embedContent?key={api_key}'
+            payload = {
+                'model': f'models/{m}',
+                'content': {'parts': [{'text': text[:2000]}]}
+            }
+            try:
+                res = requests.post(url, json=payload, timeout=4)
+                if res.status_code == 200:
+                    data = res.json()
+                    return data.get('embedding', {}).get('values', [])
+                last_err = f'HTTP {res.status_code}: {res.text[:150]}'
+            except Exception as e:
+                last_err = str(e)
+        raise RuntimeError(f'Gemini embedding failed: {last_err}')
 
     def _embed_batch_gemini(self, texts: list[str], api_key: str) -> list[list[float]]:
-        """Call Gemini text-embedding-004 REST API in batches of up to 50 items."""
-        url = f'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key={api_key}'
-        all_embeddings = []
-        batch_size = 50
+        """Call Gemini REST API in batches of up to 50 items."""
+        models_to_try = ['text-embedding-004', 'embedding-001']
+        last_err = None
+        for m in models_to_try:
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{m}:batchEmbedContents?key={api_key}'
+            all_embeddings = []
+            batch_size = 50
+            failed = False
 
-        for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i + batch_size]
-            requests_payload = [
-                {
-                    'model': 'models/text-embedding-004',
-                    'content': {'parts': [{'text': t[:2000]}]}
-                }
-                for t in batch_texts
-            ]
-            res = requests.post(url, json={'requests': requests_payload}, timeout=15)
-            if res.status_code == 200:
-                data = res.json()
-                emb_list = data.get('embeddings', [])
-                for item in emb_list:
-                    all_embeddings.append(item.get('values', []))
-            else:
-                raise RuntimeError(f'Gemini batch embedding HTTP {res.status_code}: {res.text[:150]}')
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                requests_payload = [
+                    {
+                        'model': f'models/{m}',
+                        'content': {'parts': [{'text': t[:2000]}]}
+                    }
+                    for t in batch_texts
+                ]
+                try:
+                    res = requests.post(url, json={'requests': requests_payload}, timeout=4)
+                    if res.status_code == 200:
+                        data = res.json()
+                        emb_list = data.get('embeddings', [])
+                        for item in emb_list:
+                            all_embeddings.append(item.get('values', []))
+                    else:
+                        failed = True
+                        last_err = f'HTTP {res.status_code}: {res.text[:150]}'
+                        break
+                except Exception as e:
+                    failed = True
+                    last_err = str(e)
+                    break
+            
+            if not failed and len(all_embeddings) == len(texts):
+                return all_embeddings
 
-        return all_embeddings
+        raise RuntimeError(f'Gemini batch embedding failed: {last_err}')
 

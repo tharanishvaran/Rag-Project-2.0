@@ -43,11 +43,7 @@ export default function QuestionAnalysis() {
     } finally { 
       setAnalyzing(false); 
     }
-  };
-
-  if (loading) return <LoadingSpinner message="Loading Question Analysis Tool..." />;
-
-  return (
+  };  return (
     <div className="analysis-page animate-fade-in">
       <div className="page-header">
         <h1>Question Paper & Topic Analysis</h1>
@@ -67,7 +63,13 @@ export default function QuestionAnalysis() {
 
           <p className="panel-subtitle">Select question papers or lecture notes to extract repeated exam questions.</p>
 
-          {documents.length === 0 ? (
+          {loading ? (
+            <div className="doc-checklist">
+              {[1, 2, 3].map(n => (
+                <div key={n} className="doc-check-item glass-card skeleton-card" style={{ height: 48 }} />
+              ))}
+            </div>
+          ) : documents.length === 0 ? (
             <div className="empty-checklist">
               <FileText size={40} className="empty-icon" />
               <p>No completed documents found in repository.</p>
@@ -129,7 +131,7 @@ export default function QuestionAnalysis() {
             </div>
           )}
 
-          {analyzing && <LoadingSpinner message="Extracting exam patterns & frequency clusters..." />}
+          {analyzing && <LoadingSpinner variant="bar" message="Extracting exam patterns & frequency clusters..." />}
 
           {result && (
             <div className="results-content animate-fade-in">

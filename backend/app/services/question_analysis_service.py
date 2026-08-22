@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 
-from app.services.pdf_service import PDFService
+from app.document_processor.processor import DocumentProcessor
 from app.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
@@ -14,28 +14,18 @@ class QuestionAnalysisService:
     """
     
     def __init__(self):
-        self.pdf_service = PDFService()
+        self.doc_processor = DocumentProcessor()
         self.embedding_service = EmbeddingService()
     
     def analyze_question_papers(self, documents: list) -> dict:
         """
         Analyze a list of document records for repeated topics.
-        
-        Args:
-            documents: List of Document model objects (should be 'Previous Question Papers')
-        
-        Returns:
-            {
-                'total_documents': int,
-                'topics': [{'topic', 'frequency', 'document_names', 'sample_questions'}],
-                'summary': str
-            }
         """
         all_questions = []
         
         for doc in documents:
             try:
-                pages = self.pdf_service.extract_text_by_page(doc.file_path)
+                pages = self.doc_processor.extract_text(doc.file_path)
                 questions = self._extract_questions_from_pages(pages, doc.original_filename)
                 all_questions.extend(questions)
             except Exception as e:

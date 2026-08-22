@@ -150,6 +150,7 @@ export default function Chat() {
   const [filterCatId, setFilterCatId] = useState('');
   const [error, setError] = useState('');
   const bottomRef = useRef();
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     Promise.all([
@@ -201,27 +202,67 @@ export default function Chat() {
   const toggleVoiceInput = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser. Please try Chrome or Edge.");
+      alert("Speech recognition is not supported in this browser. Please try Google Chrome or Microsoft Edge.");
       return;
     }
 
     if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
       setIsListening(false);
     } else {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = language.toLowerCase().includes('tamil') ? 'ta-IN' : 'en-US';
+      try {
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onresult = (e) => {
-        const transcript = e.results[0][0].transcript;
-        setQuestion(prev => prev ? `${prev} ${transcript}` : transcript);
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        const langLower = language.toLowerCase();
+        if (langLower.includes('tamil')) {
+          recognition.lang = 'ta-IN';
+        } else if (langLower.includes('hindi')) {
+          recognition.lang = 'hi-IN';
+        } else if (langLower.includes('telugu')) {
+          recognition.lang = 'te-IN';
+        } else {
+          recognition.lang = 'en-US';
+        }
+
+        const initialPrompt = question ? question.trim() + ' ' : '';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setError('');
+        };
+
+        recognition.onresult = (e) => {
+          let currentTranscript = '';
+          for (let i = 0; i < e.results.length; i++) {
+            currentTranscript += e.results[i][0].transcript;
+          }
+          setQuestion(initialPrompt + currentTranscript);
+        };
+
+        recognition.onerror = (e) => {
+          if (e.error === 'not-allowed') {
+            setError('Microphone access denied. Please allow microphone permissions in your browser settings.');
+          } else if (e.error !== 'no-speech') {
+            setError(`Voice input notice (${e.error}).`);
+          }
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognition.start();
+      } catch (err) {
+        setError('Voice assistant initialization failed.');
         setIsListening(false);
-      };
-      recognition.onerror = () => setIsListening(false);
-      recognition.onend = () => setIsListening(false);
-      recognition.start();
+      }
     }
   };
 

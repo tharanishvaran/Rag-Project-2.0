@@ -17,19 +17,27 @@ class Document(db.Model):
     file_size = db.Column(db.BigInteger, nullable=True)  # bytes
     total_pages = db.Column(db.Integer, nullable=True)
     
-    # Processing status: uploaded → processing → completed / failed
-    upload_status = db.Column(
-        db.Enum('uploaded', 'processing', 'completed', 'failed', name='upload_status_enum'),
-        default='uploaded',
-        nullable=False
-    )
-    processing_error = db.Column(db.Text, nullable=True)
+    # Processing lifecycle status: UPLOADED -> PROCESSING -> INDEXED / FAILED
+    upload_status = db.Column(db.String(50), default='UPLOADED', nullable=False, index=True)
+    processing_progress = db.Column(db.Integer, default=0, nullable=False)
+    total_chunks = db.Column(db.Integer, default=0, nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
     
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    indexed_at = db.Column(db.DateTime, nullable=True)
     
     # Relationships
     message_sources = db.relationship('MessageSource', backref='document', lazy='dynamic')
     
+    @property
+    def processing_error(self):
+        return self.error_message
+
+    @processing_error.setter
+    def processing_error(self, value):
+        self.error_message = value
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -39,10 +47,15 @@ class Document(db.Model):
             'original_filename': self.original_filename,
             'stored_filename': self.stored_filename,
             'file_size': self.file_size,
-            'total_pages': self.total_pages,
-            'upload_status': self.upload_status,
-            'processing_error': self.processing_error,
-            'created_at': self.created_at.isoformat(),
+            'total_pages': self.total_pages or 0,
+            'upload_status': self.upload_status.upper() if self.upload_status else 'UPLOADED',
+            'processing_progress': self.processing_progress or 0,
+            'total_chunks': self.total_chunks or 0,
+            'error_message': self.error_message,
+            'processing_error': self.error_message,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'indexed_at': self.indexed_at.isoformat() if self.indexed_at else None,
         }
     
     def __repr__(self):

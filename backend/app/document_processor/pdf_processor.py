@@ -23,10 +23,12 @@ class PDFProcessor:
         total_pages = len(doc)
         total_chars = 0
         
+        # 1. Fast Native PyMuPDF Text Extraction Loop (< 0.05s)
         for page_num in range(total_pages):
             page = doc[page_num]
             raw_text = page.get_text()
             cleaned = PDFProcessor._clean_text(raw_text)
+            
             if cleaned.strip():
                 pages.append({
                     'page_number': page_num + 1,
@@ -36,10 +38,30 @@ class PDFProcessor:
                 })
                 total_chars += len(cleaned)
         
+        # 2. OCR Fallback ONLY if zero digital text characters were found across entire PDF
+        if total_chars == 0 and total_pages > 0:
+            logger.info(f"PDF {file_path} has 0 digital text characters. Attempting OCR on page 1...")
+            try:
+                from app.services.ocr_service import OCRService
+                page = doc[0]
+                pix = page.get_pixmap(dpi=120)
+                png_bytes = pix.tobytes("png")
+                ocr_text = OCRService.extract_text_from_image_bytes(png_bytes, 'image/png')
+                if ocr_text and ocr_text.strip():
+                    pages.append({
+                        'page_number': 1,
+                        'section': 'Page 1 (OCR)',
+                        'text': ocr_text.strip(),
+                        'file_type': 'pdf'
+                    })
+                    total_chars += len(ocr_text)
+            except Exception as e:
+                logger.warning(f"Failed OCR on PDF {file_path}: {e}")
+        
         doc.close()
         
         if total_chars == 0:
-            raise ValueError("PDF appears to be empty or a scanned document without extractable text.")
+            raise ValueError("PDF appears to be empty or contains no extractable text.")
             
         logger.info(f"Extracted {total_chars} chars across {len(pages)} pages from {file_path}")
         return pages

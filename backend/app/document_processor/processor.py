@@ -33,6 +33,8 @@ class DocumentProcessor:
             return TextProcessor.extract(file_path, is_markdown=False)
         elif ext == 'md':
             return TextProcessor.extract(file_path, is_markdown=True)
+        elif ext in ['png', 'jpg', 'jpeg', 'webp']:
+            return ImageProcessor.extract(file_path)
         else:
-            raise ValueError(f"Unsupported document format: .{ext}. Allowed formats: PDF, Word (.docx), Text (.txt), Markdown (.md), PowerPoint (.pptx)")
+            raise ValueError(f"Unsupported document format: .{ext}. Allowed formats: PDF, Word (.docx), Text (.txt), Markdown (.md), PowerPoint (.pptx), Images (.png, .jpg)")
 

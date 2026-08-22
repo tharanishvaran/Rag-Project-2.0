@@ -45,9 +45,20 @@ class Config:
     # File Uploads
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 52428800))  # 50MB
-    ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'pptx'}
+    ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'pptx', 'png', 'jpg', 'jpeg', 'webp'}
 
     
+    # Redis & Celery Config
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+    CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_ALWAYS_EAGER', 'False').lower() == 'true'
+
+    # Batch Processing & Concurrency Limits
+    EMBEDDING_BATCH_SIZE = int(os.getenv('EMBEDDING_BATCH_SIZE', 32))
+    VECTOR_BATCH_SIZE = int(os.getenv('VECTOR_BATCH_SIZE', 50))
+    MAX_CONCURRENT_UPLOADS = int(os.getenv('MAX_CONCURRENT_UPLOADS', 3))
+
     # Rate Limiting
     RATELIMIT_DEFAULT = os.getenv('RATELIMIT_DEFAULT', '100 per day;30 per hour')
     
@@ -59,7 +70,7 @@ class Config:
     
     # Gemini API
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
+    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
     GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS', 4096))
 
     # Ollama
@@ -69,7 +80,7 @@ class Config:
     OLLAMA_NUM_CTX = int(os.getenv('OLLAMA_NUM_CTX', 4096))
     
     # RAG Settings
-    RAG_TOP_K = int(os.getenv('RAG_TOP_K', 5))
+    RAG_TOP_K = int(os.getenv('RAG_TOP_K', 8))
     CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1000))
     CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', 150))
 

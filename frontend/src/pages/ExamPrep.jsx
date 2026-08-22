@@ -216,7 +216,7 @@ export default function ExamPrep() {
         </div>
       </div>
 
-      {loading && <LoadingSpinner message="AI is analyzing syllabus context and generating insights..." />}
+      {loading && <LoadingSpinner variant="bar" message="AI is analyzing syllabus context and generating insights..." />}
 
       {/* Results Display */}
       {activeTab === 'strategy' && strategyResult && (
