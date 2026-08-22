@@ -112,7 +112,7 @@ class EmbeddingService:
 
     def _embed_single_gemini(self, text: str, api_key: str) -> list[float]:
         """Call Gemini REST API for a single text embedding."""
-        models_to_try = ['text-embedding-004', 'embedding-001']
+        models_to_try = ['gemini-embedding-001', 'gemini-embedding-2']
         last_err = None
         for m in models_to_try:
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{m}:embedContent?key={api_key}'
@@ -132,7 +132,7 @@ class EmbeddingService:
 
     def _embed_batch_gemini(self, texts: list[str], api_key: str) -> list[list[float]]:
         """Call Gemini REST API in batches of up to 50 items."""
-        models_to_try = ['text-embedding-004', 'embedding-001']
+        models_to_try = ['gemini-embedding-001', 'gemini-embedding-2']
         last_err = None
         for m in models_to_try:
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{m}:batchEmbedContents?key={api_key}'
