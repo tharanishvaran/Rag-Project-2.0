@@ -105,13 +105,9 @@ class EmbeddingService:
             try:
                 return self._embed_single_gemini(query, api_key)
             except Exception as e:
-                logger.warning(f'Gemini query embedding failed ({e}), falling back...')
+                logger.warning(f'Gemini query embedding failed ({e}), falling back to hash...')
 
-        model = _get_local_model()
-        if model is not None:
-            embedding = model.encode(query, convert_to_numpy=True)
-            return embedding.tolist()
-
+        # Instant deterministic hash embedding fallback (0.001s, no downloads)
         return _hash_embedding(query)
 
     def _embed_single_gemini(self, text: str, api_key: str) -> list[float]:
@@ -125,7 +121,7 @@ class EmbeddingService:
                 'content': {'parts': [{'text': text[:2000]}]}
             }
             try:
-                res = requests.post(url, json=payload, timeout=4)
+                res = requests.post(url, json=payload, timeout=8)
                 if res.status_code == 200:
                     data = res.json()
                     return data.get('embedding', {}).get('values', [])
@@ -154,7 +150,7 @@ class EmbeddingService:
                     for t in batch_texts
                 ]
                 try:
-                    res = requests.post(url, json={'requests': requests_payload}, timeout=4)
+                    res = requests.post(url, json={'requests': requests_payload}, timeout=15)
                     if res.status_code == 200:
                         data = res.json()
                         emb_list = data.get('embeddings', [])
