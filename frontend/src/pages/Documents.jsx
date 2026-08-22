@@ -72,6 +72,27 @@ export default function Documents() {
       try {
         const docsRes = await documentService.getAll(filterCat || undefined);
         const updatedDocs = docsRes.data?.data?.documents || [];
+        
+        // Check if any document just finished indexing
+        const previouslyProcessing = documents.filter(
+          d => d.upload_status === 'PROCESSING' || d.upload_status === 'processing' || d.upload_status === 'UPLOADED' || d.upload_status === 'uploaded'
+        ).map(d => d.id);
+        const nowIndexed = updatedDocs.filter(
+          d => previouslyProcessing.includes(d.id) && (d.upload_status === 'INDEXED' || d.upload_status === 'completed')
+        );
+        if (nowIndexed.length > 0) {
+          const names = nowIndexed.map(d => d.original_filename).join(', ');
+          setSuccess(`✅ ${names} indexed successfully! You can now ask questions in AI Chat.`);
+        }
+        
+        // Check for failures
+        const nowFailed = updatedDocs.filter(
+          d => previouslyProcessing.includes(d.id) && (d.upload_status === 'FAILED' || d.upload_status === 'failed')
+        );
+        if (nowFailed.length > 0) {
+          setError(`Failed to index: ${nowFailed.map(d => d.original_filename).join(', ')}`);
+        }
+
         setDocuments(updatedDocs);
       } catch (err) {
         console.error('Document polling notice:', err);
@@ -125,7 +146,7 @@ export default function Documents() {
     setUploadProgress(100);
 
     if (failed.length === 0) {
-      setSuccess(`${successful.length} file(s) uploaded! Celery background indexing in progress...`);
+      setSuccess(`${successful.length} file(s) uploaded! ⏳ Background indexing in progress — badges will update to INDEXED when ready for AI Chat.`);
     } else if (successful.length > 0) {
       setSuccess(`${successful.length} file(s) uploaded.`);
       setError(`Failed: ${failed.map(f => f.file).join(', ')}.`);
