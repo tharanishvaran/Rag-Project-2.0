@@ -1,8 +1,9 @@
 services:
-  # 1. Backend Flask REST API Web Service
+  # 100% Free Web Service on Render (No Credit Card / Payment Required)
   - type: web
     name: smartdoc-backend
     env: python
+    plan: free
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 run:app
     envVars:
@@ -15,43 +16,4 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: DATABASE_URL
-        fromDatabase:
-          name: smartdoc-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: smartdoc-redis
-          property: connectionString
-
-  # 2. Celery Background Processing Worker Service
-  - type: worker
-    name: smartdoc-celery-worker
-    env: python
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && celery -A celery_worker.celery worker --loglevel=info
-    envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: smartdoc-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: smartdoc-redis
-          property: connectionString
-
-  # 3. Redis Cache & Celery Task Broker
-  - type: redis
-    name: smartdoc-redis
-    ipAllowList: []
-
-databases:
-  # 4. Managed Database Instance
-  - name: smartdoc-db
-    databaseName: smartdoc
-    user: smartdoc_user
+        value: sqlite:///app.db
